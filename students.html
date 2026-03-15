@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>學生名單管理 — 微積分助教成績系統</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+:root{--primary:#2c4a7c;--primary-light:#3a62a7;--accent:#4a90d9;--success:#28a745;--warning:#ffc107;--danger:#dc3545;--bg:#f4f6f9;--card-bg:#fff;--border:#dee2e6;--text:#333;--text-muted:#6c757d;--sidebar-w:220px;--header-h:56px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px}
+body{font-family:'Noto Sans TC','Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}ul{list-style:none}
+.topbar{height:var(--header-h);background:var(--primary);color:#fff;display:flex;align-items:center;padding:0 1.5rem;gap:1rem;position:fixed;top:0;left:0;right:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,.18)}
+.topbar .logo{font-size:1.1rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.topbar .logo span{color:var(--accent)}
+.topbar .ta-selector{margin-left:auto;display:flex;align-items:center;gap:.5rem;font-size:.88rem}
+.topbar .ta-selector label{color:#c8d8ef;white-space:nowrap}
+.topbar .ta-selector select{padding:4px 10px;border-radius:6px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:.88rem;cursor:pointer;outline:none}
+.topbar .ta-selector select option{background:var(--primary);color:#fff}
+.ta-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(74,144,217,.25);border:1px solid rgba(74,144,217,.5);border-radius:20px;padding:2px 10px;font-size:.82rem;color:#aecfee}
+.ta-badge::before{content:'👤';font-size:.9em}
+.sidebar{width:var(--sidebar-w);background:#1e3560;position:fixed;top:var(--header-h);left:0;bottom:0;overflow-y:auto;padding:1.2rem 0;z-index:90}
+.sidebar .nav-section{padding:.5rem 1rem .25rem;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#6888b5;margin-top:.5rem}
+.sidebar .nav-item a{display:flex;align-items:center;gap:.6rem;padding:.6rem 1.2rem;color:#b0c4e0;font-size:.9rem;border-left:3px solid transparent;transition:all .15s}
+.sidebar .nav-item a:hover,.sidebar .nav-item a.active{background:rgba(74,144,217,.18);color:#fff;border-left-color:var(--accent);text-decoration:none}
+.sidebar .nav-item a .icon{font-size:1rem;width:1.4rem;text-align:center}
+.main-content{margin-left:var(--sidebar-w);margin-top:var(--header-h);padding:1.8rem 2rem;flex:1}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.4rem;padding-bottom:.8rem;border-bottom:2px solid var(--border)}
+.page-header h1{font-size:1.4rem;font-weight:700;color:var(--primary)}
+.page-header .actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:1.4rem;margin-bottom:1.2rem;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card-title{font-size:1rem;font-weight:600;color:var(--primary);margin-bottom:1rem}
+.btn{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem 1rem;border-radius:6px;border:1px solid transparent;font-size:.88rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{background:var(--primary-light)}
+.btn-success{background:var(--success);color:#fff}
+.btn-danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn-outline{background:transparent;color:var(--primary);border-color:var(--primary)}
+.btn-outline:hover{background:var(--primary);color:#fff}
+.btn-sm{padding:.25rem .6rem;font-size:.8rem}
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.9rem;background:var(--card-bg)}
+thead tr{background:#f0f4fa}
+thead th{padding:.7rem 1rem;text-align:left;font-weight:600;color:var(--primary);border-bottom:2px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid #eef0f4;transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#f5f8ff}
+tbody td{padding:.65rem 1rem;vertical-align:middle}
+.td-actions{display:flex;gap:.4rem;align-items:center}
+.table-empty{text-align:center;padding:3rem;color:var(--text-muted);font-size:.95rem}
+.table-empty .empty-icon{font-size:2.5rem;display:block;margin-bottom:.5rem}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem}
+.form-group{display:flex;flex-direction:column;gap:.3rem}
+.form-group label{font-size:.82rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
+.form-control{padding:.45rem .75rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem;color:var(--text);background:#fff;transition:border-color .15s,box-shadow .15s;font-family:inherit;width:100%}
+.form-control:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(74,144,217,.15)}
+.form-hint{font-size:.78rem;color:var(--text-muted)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:1rem;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--card-bg);border-radius:10px;width:100%;max-width:540px;box-shadow:0 8px 30px rgba(0,0,0,.2);transform:translateY(20px);transition:transform .2s;overflow:hidden}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-header{background:var(--primary);color:#fff;padding:1rem 1.4rem;display:flex;align-items:center;justify-content:space-between;font-weight:600;font-size:1rem}
+.modal-close{background:none;border:none;color:#fff;font-size:1.3rem;cursor:pointer;line-height:1;padding:0}
+.modal-body{padding:1.4rem}
+.modal-footer{padding:1rem 1.4rem;border-top:1px solid var(--border);display:flex;gap:.6rem;justify-content:flex-end}
+#toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;display:flex;flex-direction:column;gap:.5rem}
+.toast{min-width:220px;max-width:340px;padding:.75rem 1rem;border-radius:8px;font-size:.88rem;font-weight:500;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.18);display:flex;align-items:center;gap:.5rem;animation:toast-in .25s ease}
+.toast.success{background:var(--success)}.toast.error{background:var(--danger)}.toast.info{background:var(--accent)}.toast.warning{background:#e09000}
+@keyframes toast-in{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.75rem;font-weight:600}
+.badge-primary{background:#dce8f8;color:var(--primary)}
+.badge-success{background:#d4edda;color:#155724}
+.search-bar{display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap}
+.search-bar .form-control{max-width:280px}
+.pagination{display:flex;gap:.3rem;align-items:center;justify-content:center;margin-top:1rem}
+.pagination button{padding:5px 10px;border:1px solid var(--border);background:#fff;border-radius:5px;cursor:pointer;font-size:.85rem;color:var(--text)}
+.pagination button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.loading-mask{display:none;position:absolute;inset:0;background:rgba(255,255,255,.75);z-index:10;align-items:center;justify-content:center;font-size:1.1rem;color:var(--primary);border-radius:8px}
+.loading-mask.show{display:flex}
+.spinner{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin-right:.5rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:768px){.sidebar{width:0;overflow:hidden}.main-content{margin-left:0;padding:1rem}}
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">📐 <span>微積分</span>助教成績系統</div>
+  <div class="ta-selector">
+    <label>目前助教：</label>
+    <select id="ta-select">
+      <option value="">— 請選擇 —</option>
+      <option value="助教 A">助教 A</option>
+      <option value="助教 B">助教 B</option>
+    </select>
+    <div class="ta-badge" id="ta-badge">未選擇</div>
+  </div>
+</header>
+
+<nav class="sidebar">
+  <div class="nav-section">主選單</div>
+  <div class="nav-item"><a href="./index.html"><span class="icon">🏠</span>首頁總覽</a></div>
+  <div class="nav-section">資料管理</div>
+  <div class="nav-item"><a href="./students.html" class="active"><span class="icon">👥</span>學生名單</a></div>
+  <div class="nav-item"><a href="./assignments.html"><span class="icon">📋</span>作業/小考</a></div>
+  <div class="nav-section">成績作業</div>
+  <div class="nav-item"><a href="./grades.html"><span class="icon">✏️</span>成績登記</a></div>
+  <div class="nav-item"><a href="./query.html"><span class="icon">🔍</span>成績查詢</a></div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>👥 學生名單管理</h1>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="exportStudents()">📥 匯出 CSV</button>
+      <button class="btn btn-primary" onclick="openModal()">➕ 新增學生</button>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="search-input" class="form-control" placeholder="🔍 搜尋學號或姓名..." oninput="onSearch()" />
+    <select id="filter-class" class="form-control" style="max-width:160px;" onchange="onSearch()">
+      <option value="">全部班級</option>
+    </select>
+    <span id="result-count" style="color:var(--text-muted);font-size:.88rem;"></span>
+  </div>
+
+  <div class="card" style="padding:0;position:relative;">
+    <div class="loading-mask" id="loading"><div class="spinner"></div> 載入中...</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>學號</th><th>姓名</th><th>班級</th><th>備註</th><th>建立時間</th><th>操作</th></tr>
+        </thead>
+        <tbody id="students-body">
+          <tr><td colspan="7" class="table-empty"><span class="empty-icon">⏳</span>載入中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="pagination" class="pagination" style="padding:.8rem;"></div>
+  </div>
+</main>
+
+<!-- 新增/編輯 Modal -->
+<div class="modal-overlay" id="student-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="modal-title">新增學生</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id" />
+      <div class="form-grid">
+        <div class="form-group">
+          <label>學號 <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="f-student-id" class="form-control" placeholder="例：B11201001" />
+        </div>
+        <div class="form-group">
+          <label>姓名 <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="f-name" class="form-control" placeholder="請輸入姓名" />
+        </div>
+        <div class="form-group">
+          <label>班級</label>
+          <input type="text" id="f-class" class="form-control" placeholder="例：微積分A組" list="class-datalist" />
+          <datalist id="class-datalist"></datalist>
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>備註</label>
+          <input type="text" id="f-note" class="form-control" placeholder="（選填）" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveStudent()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 確認刪除 Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><span>確認操作</span><button class="modal-close" onclick="document.getElementById('confirm-modal').classList.remove('open')">✕</button></div>
+    <div class="modal-body"><p class="confirm-message"></p></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline confirm-cancel">取消</button>
+      <button class="btn btn-danger confirm-ok">確認刪除</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script>
+/* ===== 共用工具 ===== */
+const TA_KEY='calcTA_currentUser';
+function getCurrentTA(){return localStorage.getItem(TA_KEY)||null}
+function setCurrentTA(n){localStorage.setItem(TA_KEY,n)}
+function initTASelector(){
+  const sel=document.getElementById('ta-select');if(!sel)return;
+  const saved=getCurrentTA();if(saved)sel.value=saved;
+  sel.addEventListener('change',()=>{setCurrentTA(sel.value);showToast('已切換為助教：'+sel.value,'info');updateTABadge()});
+  updateTABadge();
+}
+function updateTABadge(){const b=document.getElementById('ta-badge');if(!b)return;b.textContent=getCurrentTA()||'未選擇'}
+function showToast(msg,type='info',dur=3000){
+  let c=document.getElementById('toast-container');
+  const icons={success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
+  const t=document.createElement('div');t.className='toast '+type;
+  t.innerHTML='<span>'+(icons[type]||'')+'</span><span>'+msg+'</span>';
+  c.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .4s';setTimeout(()=>t.remove(),400)},dur);
+}
+function confirmDialog(msg){
+  return new Promise(resolve=>{
+    const ov=document.getElementById('confirm-modal');
+    if(!ov){resolve(window.confirm(msg));return}
+    ov.querySelector('.confirm-message').textContent=msg;
+    ov.classList.add('open');
+    const ok=ov.querySelector('.confirm-ok'),ca=ov.querySelector('.confirm-cancel');
+    function done(r){ov.classList.remove('open');ok.removeEventListener('click',onOk);ca.removeEventListener('click',onCa);resolve(r)}
+    const onOk=()=>done(true),onCa=()=>done(false);
+    ok.addEventListener('click',onOk);ca.addEventListener('click',onCa);
+  });
+}
+function formatTimestamp(ms){if(!ms)return'—';return new Date(Number(ms)).toLocaleString('zh-TW',{dateStyle:'short',timeStyle:'short'})}
+function highlight(text,kw){
+  if(!kw||!text)return text||'';
+  const esc=kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return String(text).replace(new RegExp(esc,'gi'),m=>'<mark>'+m+'</mark>');
+}
+function exportCSV(rows,filename='export'){
+  const esc=v=>{const s=String(v===null||v===undefined?'':v);return(s.includes(',')||s.includes('\n')||s.includes('"'))?'"'+s.replace(/"/g,'""')+'"':s};
+  const csv=rows.map(r=>r.map(esc).join(',')).join('\r\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=filename+'.csv';document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},500);
+}
+function renderPagination(container,total,page,limit,cb){
+  container.innerHTML='';const tp=Math.ceil(total/limit);if(tp<=1)return;
+  const mk=(txt,pg,dis)=>{const b=document.createElement('button');b.textContent=txt;b.disabled=dis;if(pg===page)b.classList.add('active');b.onclick=()=>cb(pg);return b};
+  container.appendChild(mk('‹',page-1,page<=1));
+  let s=Math.max(1,page-3),e=Math.min(tp,s+6);if(e-s<6)s=Math.max(1,e-6);
+  for(let i=s;i<=e;i++)container.appendChild(mk(i,i,false));
+  container.appendChild(mk('›',page+1,page>=tp));
+  const info=document.createElement('span');info.style.cssText='font-size:.8rem;color:#888;margin-left:6px;';info.textContent='共'+total+'筆';container.appendChild(info);
+}
+async function apiGet(table,params={}){
+  const qs=new URLSearchParams(params).toString();const url='tables/'+table+(qs?'?'+qs:'');
+  const res=await fetch(url);if(!res.ok)throw new Error('GET '+url+' 失敗：'+res.status);return res.json();
+}
+async function apiPost(table,data){
+  const res=await fetch('tables/'+table,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  if(!res.ok){const t=await res.text();throw new Error('POST '+table+' 失敗：'+res.status+' '+t)}return res.json();
+}
+async function apiPut(table,id,data){
+  const res=await fetch('tables/'+table+'/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  if(!res.ok)throw new Error('PUT 失敗：'+res.status);return res.json();
+}
+async function apiDelete(table,id){
+  const res=await fetch('tables/'+table+'/'+id,{method:'DELETE'});
+  if(!res.ok)throw new Error('DELETE 失敗：'+res.status);
+}
+
+/* ===== 學生名單邏輯 ===== */
+let allStudents=[],filtered=[],currentPage=1;
+const PAGE_LIMIT=20;
+
+async function loadStudents(){
+  showLoading(true);
+  try{
+    const res=await apiGet('students',{limit:300});
+    allStudents=res.data||[];
+    buildClassFilter();onSearch();
+  }catch(e){showToast('載入失敗：'+e.message,'error')}
+  finally{showLoading(false)}
+}
+
+function onSearch(){
+  const kw=document.getElementById('search-input').value.trim().toLowerCase();
+  const cls=document.getElementById('filter-class').value;
+  filtered=allStudents.filter(s=>{
+    const mk=!kw||(s.student_id||'').toLowerCase().includes(kw)||(s.name||'').toLowerCase().includes(kw);
+    const mc=!cls||(s.class_name||'')===cls;return mk&&mc;
+  });
+  document.getElementById('result-count').textContent='共 '+filtered.length+' 筆';
+  currentPage=1;renderTable();
+}
+
+function renderTable(){
+  const tbody=document.getElementById('students-body');
+  const start=(currentPage-1)*PAGE_LIMIT;
+  const page=filtered.slice(start,start+PAGE_LIMIT);
+  const kw=document.getElementById('search-input').value.trim();
+  if(!page.length){
+    tbody.innerHTML='<tr><td colspan="7" class="table-empty"><span class="empty-icon">👥</span>'+(allStudents.length===0?'尚未新增任何學生，點右上角「新增學生」開始':'沒有符合的搜尋結果')+'</td></tr>';
+  }else{
+    tbody.innerHTML=page.map((s,i)=>`<tr>
+      <td style="color:var(--text-muted);font-size:.8rem;">${start+i+1}</td>
+      <td><code>${highlight(s.student_id,kw)}</code></td>
+      <td><strong>${highlight(s.name,kw)}</strong></td>
+      <td>${s.class_name?'<span class="badge badge-primary">'+s.class_name+'</span>':'—'}</td>
+      <td style="color:var(--text-muted);">${s.note||'—'}</td>
+      <td style="font-size:.8rem;color:var(--text-muted);">${formatTimestamp(s.created_at)}</td>
+      <td><div class="td-actions">
+        <button class="btn btn-outline btn-sm" onclick='openModal(${JSON.stringify(s)})'>✏️ 編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}','${s.name.replace(/'/g,"\\'")}')">🗑️ 刪除</button>
+      </div></td>
+    </tr>`).join('');
+  }
+  renderPagination(document.getElementById('pagination'),filtered.length,currentPage,PAGE_LIMIT,p=>{currentPage=p;renderTable();window.scrollTo(0,0)});
+}
+
+function buildClassFilter(){
+  const sel=document.getElementById('filter-class');
+  const dl=document.getElementById('class-datalist');
+  const classes=[...new Set(allStudents.map(s=>s.class_name).filter(Boolean))].sort();
+  const cur=sel.value;
+  sel.innerHTML='<option value="">全部班級</option>'+classes.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+  sel.value=cur;
+  if(dl)dl.innerHTML=classes.map(c=>'<option value="'+c+'">').join('');
+}
+
+function openModal(student=null){
+  ['edit-id','f-student-id','f-name','f-class','f-note'].forEach(id=>document.getElementById(id).value='');
+  if(student){
+    document.getElementById('modal-title').textContent='編輯學生';
+    document.getElementById('edit-id').value=student.id;
+    document.getElementById('f-student-id').value=student.student_id||'';
+    document.getElementById('f-name').value=student.name||'';
+    document.getElementById('f-class').value=student.class_name||'';
+    document.getElementById('f-note').value=student.note||'';
+  }else{
+    document.getElementById('modal-title').textContent='新增學生';
+  }
+  document.getElementById('student-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('f-student-id').focus(),100);
+}
+function closeModal(){document.getElementById('student-modal').classList.remove('open')}
+
+async function saveStudent(){
+  const id=document.getElementById('edit-id').value;
+  const studentId=document.getElementById('f-student-id').value.trim();
+  const name=document.getElementById('f-name').value.trim();
+  const className=document.getElementById('f-class').value.trim();
+  const note=document.getElementById('f-note').value.trim();
+  if(!studentId){showToast('請輸入學號','warning');return}
+  if(!name){showToast('請輸入姓名','warning');return}
+  if(!getCurrentTA()){showToast('請先選擇助教身份','warning');return}
+  const data={student_id:studentId,name,class_name:className,note};
+  try{
+    if(id){await apiPut('students',id,data);showToast('已更新：'+name,'success')}
+    else{await apiPost('students',data);showToast('已新增：'+name,'success')}
+    closeModal();await loadStudents();
+  }catch(e){showToast('儲存失敗：'+e.message,'error')}
+}
+
+async function deleteStudent(id,name){
+  const ok=await confirmDialog('確定要刪除學生「'+name+'」嗎？');
+  if(!ok)return;
+  try{await apiDelete('students',id);showToast('已刪除：'+name,'success');await loadStudents()}
+  catch(e){showToast('刪除失敗：'+e.message,'error')}
+}
+
+function exportStudents(){
+  if(!filtered.length){showToast('沒有資料可匯出','warning');return}
+  exportCSV([['學號','姓名','班級','備註'],...filtered.map(s=>[s.student_id,s.name,s.class_name,s.note])],'學生名單');
+  showToast('已匯出 '+filtered.length+' 筆','success');
+}
+
+function showLoading(show){document.getElementById('loading').classList.toggle('show',show)}
+
+document.addEventListener('DOMContentLoaded',()=>{initTASelector();loadStudents()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+</script>
+</body>
+</html>

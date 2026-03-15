@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微積分助教成績系統</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+<!-- SheetJS for xlsx import -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Supabase (用於發布後端，取得網址與雙人同步) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --primary: #2c4a7c;
+  --primary-light: #3a62a7;
+  --accent: #4a90d9;
+  --success: #28a745;
+  --warning: #ffc107;
+  --danger: #dc3545;
+  --bg: #f4f6f9;
+  --card-bg: #fff;
+  --border: #dee2e6;
+  --text: #333;
+  --muted: #6c757d;
+  --sidebar-w: 220px;
+  --header-h: 56px;
+}
+
+/* ===== Reset ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+a { color: inherit; text-decoration: none; }
+ul, ol { list-style: none; }
+input, select, textarea, button { font-family: inherit; font-size: 14px; }
+
+/* ===== Top Bar ===== */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+  background: var(--primary); color: #fff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.topbar-logo { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; }
+.topbar-logo i { font-size: 20px; }
+.ta-selector { display: flex; align-items: center; gap: 10px; }
+.ta-selector label { font-size: 13px; opacity: .85; }
+.ta-selector select {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.4);
+  background: rgba(255,255,255,.15); color: #fff; cursor: pointer; outline: none;
+}
+.ta-selector select option { color: #333; background: #fff; }
+.ta-badge {
+  background: rgba(255,255,255,.25); border-radius: 12px;
+  padding: 3px 12px; font-size: 12px; font-weight: 500;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  position: fixed; top: var(--header-h); left: 0; width: var(--sidebar-w);
+  height: calc(100vh - var(--header-h)); background: #1e3457;
+  overflow-y: auto; z-index: 90; padding: 16px 0;
+}
+.sidebar-section { padding: 4px 16px 4px; color: rgba(255,255,255,.4); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-top: 8px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; color: rgba(255,255,255,.75); cursor: pointer;
+  transition: all .2s; border-left: 3px solid transparent;
+}
+.nav-item:hover { background: rgba(255,255,255,.08); color: #fff; }
+.nav-item.active { background: rgba(74,144,217,.2); color: #fff; border-left-color: var(--accent); }
+.nav-item i { width: 18px; text-align: center; font-size: 15px; }
+
+/* ===== Main Content ===== */
+.main-content {
+  margin-left: var(--sidebar-w); margin-top: var(--header-h);
+  padding: 24px; min-height: calc(100vh - var(--header-h));
+}
+.page { display: none; }
+.page.active { display: block; }
+
+/* ===== Page Header ===== */
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.page-title { font-size: 20px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+.page-title i { color: var(--accent); }
+
+/* ===== Cards ===== */
+.card { background: var(--card-bg); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+/* ===== Stat Cards ===== */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.stat-card { background: var(--card-bg); border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; align-items: center; gap: 16px; }
+.stat-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; }
+.stat-icon.blue { background: var(--accent); }
+.stat-icon.green { background: var(--success); }
+.stat-icon.orange { background: var(--warning); }
+.stat-icon.purple { background: #6f42c1; }
+.stat-info .num { font-size: 24px; font-weight: 700; color: var(--primary); }
+.stat-info .lbl { font-size: 12px; color: var(--muted); }
+
+/* ===== Nav Cards (homepage shortcuts) ===== */
+.nav-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.nav-card { background: var(--card-bg); border-radius: 10px; padding: 24px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); text-align: center; cursor: pointer; transition: all .2s; border: 2px solid transparent; }
+.nav-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.nav-card i { font-size: 32px; color: var(--accent); margin-bottom: 12px; display: block; }
+.nav-card .nc-title { font-size: 14px; font-weight: 700; color: var(--primary); }
+.nav-card .nc-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* ===== Buttons ===== */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; transition: all .2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-light); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { background: #218838; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #c82333; }
+.btn-warning { background: var(--warning); color: #333; }
+.btn-warning:hover { background: #e0a800; }
+.btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+.btn-outline:hover { background: var(--primary); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-info { background: var(--accent); color: #fff; }
+.btn-info:hover { background: #357abd; }
+.btn-secondary { background: var(--muted); color: #fff; }
+.btn-secondary:hover { background: #5a6268; }
+
+/* ===== Table ===== */
+.table-wrapper { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { background: #f8f9fa; padding: 10px 12px; text-align: left; font-weight: 600; color: var(--primary); border-bottom: 2px solid var(--border); font-size: 13px; white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:hover td { background: #f8f9fa; }
+.empty-state { text-align: center; padding: 40px; color: var(--muted); }
+.empty-state i { font-size: 36px; display: block; margin-bottom: 10px; }
+
+/* ===== Forms ===== */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.form-control {
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+  outline: none; transition: border .2s; background: #fff;
+}
+.form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,144,217,.15); }
+textarea.form-control { resize: vertical; min-height: 80px; }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.5); z-index: 200; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal { background: #fff; border-radius: 12px; width: 520px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+.modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.modal-header h3 { font-size: 16px; font-weight: 700; color: var(--primary); }
+.modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); line-height: 1; }
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ===== Toast ===== */
+#toast-container { position: fixed; top: 70px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 12px 18px; border-radius: 8px; color: #fff; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,.2); display: flex; align-items: center; gap: 8px; min-width: 240px; animation: slideIn .3s ease; }
+.toast.success { background: var(--success); }
+.toast.error   { background: var(--danger); }
+.toast.info    { background: var(--accent); }
+.toast.warning { background: var(--warning); color: #333; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ===== Badge ===== */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-primary  { background: #d1e4f5; color: var(--primary); }
+.badge-success  { background: #d4edda; color: #155724; }
+.badge-warning  { background: #fff3cd; color: #856404; }
+.badge-danger   { background: #f8d7da; color: #721c24; }
+.badge-secondary{ background: #e2e3e5; color: #383d41; }
+
+/* ===== Grades Page ===== */
+.progress-bar-wrap { background: #e9ecef; border-radius: 8px; height: 10px; overflow: hidden; margin-bottom: 6px; }
+.progress-bar-fill { height: 100%; background: var(--success); border-radius: 8px; transition: width .4s; }
+.score-input { width: 90px; text-align: center; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; outline: none; }
+.score-input:focus { border-color: var(--accent); }
+.score-input.dirty { border-color: var(--warning); background: #fff8e1; }
+.score-input.saved { border-color: var(--success); background: #f0fff4; }
+
+/* ===== Query Page Tabs ===== */
+.query-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+.tab-btn { padding: 10px 20px; border: none; background: none; cursor: pointer; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .2s; font-weight: 500; }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--accent); }
+.tab-btn:hover { color: var(--primary); }
+
+/* ===== Search Bar ===== */
+.search-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.search-input { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; outline: none; }
+.search-input:focus { border-color: var(--accent); }
+
+/* ===== Settings Page ===== */
+.settings-section { margin-bottom: 28px; }
+.settings-section h4 { font-size: 14px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+/* ===== Upload Zone ===== */
+.upload-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 32px; text-align: center; cursor: pointer; transition: all .2s; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: #f0f7ff; }
+.upload-zone i { font-size: 36px; color: var(--accent); display: block; margin-bottom: 10px; }
+.upload-zone p { color: var(--muted); font-size: 13px; }
+
+/* ===== Pagination ===== */
+.pagination { display: flex; gap: 6px; align-items: center; justify-content: center; margin-top: 16px; }
+.page-btn { min-width: 32px; height: 32px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 13px; transition: all .2s; }
+.page-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ===== Loading ===== */
+.loading-mask { display: none; position: absolute; inset: 0; background: rgba(255,255,255,.7); z-index: 10; align-items: center; justify-content: center; border-radius: 10px; }
+.loading-mask.show { display: flex; }
+.spinner { width: 36px; height: 36px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== Highlight ===== */
+mark { background: #fff176; border-radius: 2px; padding: 0 2px; }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .main-content { margin-left: 0; padding: 16px; }
+  .stat-grid, .nav-cards { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== TOP BAR ===== -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <i class="fas fa-calculator"></i>
+    <span id="sys-name">微積分助教成績系統</span>
+  </div>
+  <div class="ta-selector">
+    <label>目前操作：</label>
+    <select id="ta-select" onchange="onTAChange()">
+      <!-- populated by JS from settings -->
+    </select>
+    <span class="ta-badge" id="ta-badge">助教 A</span>
+  </div>
+</header>
+
+<!-- ===== SIDEBAR ===== -->
+<nav class="sidebar">
+  <div class="sidebar-section">主要功能</div>
+  <div class="nav-item active" onclick="navigate('home')" data-page="home"><i class="fas fa-home"></i> 首頁</div>
+  <div class="nav-item" onclick="navigate('students')" data-page="students"><i class="fas fa-users"></i> 學生名單</div>
+  <div class="nav-item" onclick="navigate('assignments')" data-page="assignments"><i class="fas fa-tasks"></i> 作業 / 測驗</div>
+  <div class="nav-item" onclick="navigate('grades')" data-page="grades"><i class="fas fa-edit"></i> 成績登記</div>
+  <div class="nav-item" onclick="navigate('query')" data-page="query"><i class="fas fa-search"></i> 成績查詢</div>
+  <div class="sidebar-section" style="margin-top:auto">系統</div>
+  <div class="nav-item" onclick="navigate('settings')" data-page="settings"><i class="fas fa-cog"></i> 系統設定</div>
+</nav>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main class="main-content">
+
+  <!-- ========== HOME PAGE ========== -->
+  <section class="page active" id="page-home">
+    <div class="page-header">
+      <div class="page-title"><i class="fas fa-home"></i> 首頁</div>
+      <span style="color:var(--muted);font-size:13px" id="today-date"></span>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+        <div class="stat-info"><div class="num" id="stat-students">-</div><div class="lbl">學生人數</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-tasks"></i></div>
+        <div class="stat-info"><div class="num" id="stat-assignments">-</div><div class="lbl">作業/測驗項目</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange"><i class="fas fa-star"></i></div>
+        <div class="stat-info"><div class="num" id="stat-grades">-</div><div class="lbl">已登記成績</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple"><i class="fas fa-chart-bar"></i></div>
+        <div class="stat-info"><div class="num" id="stat-avg">-</div><div class="lbl">平均分數</div></div>
+      </div>
+    </div>
+
+    <div class="nav-cards">
+      <div class="nav-card" onclick="navigate('students')">
+        <i class="fas fa-users"></i>
+        <div class="nc-title">學生名單管理</div>
+        <div class="nc-desc">新增、編輯、刪除學生</div>
+      </div>
+      <div class="nav-card" onclick="navigate('assignments')">
+        <i class="fas fa-tasks"></i>
+        <div class="nc-title">作業 / 測驗管理</div>
+        <div class="nc-desc">建立評分項目</div>
+      </div>
+      <div class="nav-card" onclick="navigate('grades')">
+        <i class="fas fa-edit"></i>
+        <div class="nc-title">成績登記</div>
+        <div class="nc-desc">批次輸入成績</div>
+      </div>
+      <div class="nav-card" onclick="navigate('query')">
+        <i class="fas fa-search"></i>
+        <div class="nc-title">成績查詢</div>
+        <div class="nc-desc">查詢 / 匯出 CSV</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fas fa-clock"></i> 最近作業/測驗</div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>ID</th><th>名稱</th><th>類型</th><th>日期</th><th>滿分</th><th>操作</th></tr></thead>
+          <tbody id="recent-body">
+            <tr><td colspan="6" class="empty-state"><i class="fas fa-spinner fa-spin"></i> 載入中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== STUDENTS PAGE ========== -->
+  <section class="page" id="page-students">
+    <div class="page-header">
+      <div class="page-title"><i class="fas fa-users"></i> 學生名單管理</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-warning" onclick="openXlsxImport()"><i class="fas fa-file-excel"></i> 匯入 xlsx</button>
+        <button class="btn btn-primary" onclick="openStudentModal()"><i class="fas fa-plus"></i> 新增學生</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="search-row" style="margin-bottom:14px">
+        <input type="text" class="search-input" id="student-search" placeholder="搜尋學號 / 姓名 / 班級..." oninput="loadStudents()">
+        <select class="form-control" id="student-class-filter" style="width:160px" onchange="loadStudents()">
+          <option value="">所有班級</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="exportStudentsCSV()"><i class="fas fa-download"></i> 匯出 CSV</button>
+      </div>
+      <div class="table-wrapper" style="position:relative">
+        <div class="loading-mask" id="students-loading"><div class="spinner"></div></div>
+        <table>
+          <thead><tr><th>#</th><th>學號</th><th>姓名</th><th>班級</th><th>建立時間</th><th>操作</th></tr></thead>
+          <tbody id="students-body"></tbody>
+        </table>
+      </div>
+      <div id="students-pagination"></div>
+    </div>
+  </section>
+
+  <!-- ========== ASSIGNMENTS PAGE ========== -->
+  <section class="page" id="page-assignments">
+    <div class="page-header">
+      <div class="page-title"><i class="fas fa-tasks"></i> 作業 / 測驗管理</div>
+      <button class="btn btn-primary" onclick="openAssignmentModal()"><i class="fas fa-plus"></i> 新增項目</button>
+    </div>
+    <div class="card">
+      <div class="search-row" style="margin-bottom:14px">
+        <input type="text" class="search-input" id="assign-search" placeholder="搜尋名稱 / 描述..." oninput="loadAssignments()">
+        <select class="form-control" id="assign-type-filter" style="width:130px" onchange="loadAssignments()">
+          <option value="">所有類型</option>
+          <option value="homework">作業</option>
+          <option value="quiz">小考</option>
+          <option value="exam">期中/期末</option>
+        </select>
+      </div>
+      <div class="table-wrapper" style="position:relative">
+        <div class="loading-mask" id="assignments-loading"><div class="spinner"></div></div>
+        <table>
+          <thead><tr><th>#</th><th>測驗 ID</th><th>名稱</th><th>類型</th><th>日期</th><th>滿分</th><th>描述</th><th>操作</th></tr></thead>
+          <tbody id="assignments-body"></tbody>
+        </table>
+      </div>
+      <div id="assignments-pagination"></div>
+    </div>
+  </section>
+
+  <!-- ========== GRADES PAGE ========== -->
+  <section class="page" id="page-grades">
+    <div class="page-header">
+      <div class="page-title"><i class="fas fa-edit"></i> 成績登記</div>
+    </div>
+
+    <div class="card">
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>選擇作業/測驗</label>
+          <select class="form-control" id="grade-assign-select" onchange="loadGradeSheet()">
+            <option value="">-- 請選擇 --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>班級篩選</label>
+          <select class="form-control" id="grade-class-filter" onchange="filterGradeRows()">
+            <option value="">所有班級</option>
+          </select>
+        </div>
+      </div>
+      <div id="grade-progress-wrap" style="display:none;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">
+          <span>已登記進度</span><span id="grade-progress-text">0 / 0</span>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="grade-progress-bar" style="width:0"></div></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-success" onclick="saveAllGrades()" id="btn-save-all" style="display:none"><i class="fas fa-save"></i> 全部儲存</button>
+        <button class="btn btn-outline btn-sm" onclick="exportGradesCSV()" id="btn-export-grades" style="display:none"><i class="fas fa-download"></i> 匯出 CSV</button>
+        <span style="color:var(--muted);font-size:12px;line-height:32px">提示：按 Enter 跳至下一位學生</span>
+      </div>
+      <div class="table-wrapper" style="position:relative">
+        <div class="loading-mask" id="grades-loading"><div class="spinner"></div></div>
+        <table id="grades-table">
+          <thead><tr><th>#</th><th>學號</th><th>姓名</th><th>班級</th><th>分數（滿分 <span id="grade-max">-</span>）</th><th>備註</th><th>狀態</th></tr></thead>
+          <tbody id="grades-body">
+            <tr><td colspan="7" class="empty-state"><i class="fas fa-hand-point-up"></i> 請先選擇作業/測驗</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== QUERY PAGE ========== -->
+  <section class="page" id="page-query">
+    <div class="page-header">
+      <div class="page-title"><i class="fas fa-search"></i> 成績查詢</div>
+      <button class="btn btn-outline btn-sm" onclick="exportQueryCSV()"><i class="fas fa-download"></i> 匯出 CSV</button>
+    </div>
+
+    <div class="query-tabs">
+      <button class="tab-btn active" onclick="switchQueryTab('student')">依學生查詢</button>
+      <button class="tab-btn" onclick="switchQueryTab('assignment')">依作業查詢</button>
+      <button class="tab-btn" onclick="switchQueryTab('matrix')">成績矩陣</button>
+    </div>
+
+    <!-- Student tab -->
+    <div id="qtab-student">
+      <div class="card">
+        <div class="search-row">
+          <input type="text" class="search-input" id="q-student-input" placeholder="輸入學號或姓名..." onkeyup="if(event.key==='Enter')queryByStudent()">
+          <button class="btn btn-primary" onclick="queryByStudent()"><i class="fas fa-search"></i> 查詢</button>
+        </div>
+      </div>
+      <div id="q-student-result"></div>
+    </div>
+
+    <!-- Assignment tab -->
+    <div id="qtab-assignment" style="display:none">
+      <div class="card">
+        <div class="search-row">
+          <select class="form-control" id="q-assign-select" style="flex:1" onchange="queryByAssignment()">
+            <option value="">-- 請選擇作業/測驗 --</option>
+          </select>
+        </div>
+      </div>
+      <div id="q-assign-result"></div>
+    </div>
+
+    <!-- Matrix tab -->
+    <div id="qtab-matrix" style="display:none">
+      <div class="card">
+        <div class="search-row">
+          <select class="form-control" id="q-matrix-class" style="width:160px" onchange="loadMatrix()">
+            <option value="">所有班級</option>
+          </select>
+          <button class="btn btn-primary" onclick="loadMatrix()"><i class="fas fa-table"></i> 顯示矩陣</button>
+        </div>
+      </div>
+      <div id="q-matrix-result"></div>
+    </div>
+  </section>
+
+  <!-- ========== SETTINGS PAGE ========== -->
+  <section class="page" id="page-settings">
+    <div class="page-header">
+      <div class="page-title"><i class="fas fa-cog"></i> 系統設定</div>
+      <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> 儲存設定</button>
+    </div>
+
+    <div class="card">
+      <div class="settings-section">
+        <h4><i class="fas fa-signature"></i> 系統名稱</h4>
+        <div class="form-group" style="max-width:400px">
+          <label>系統顯示名稱</label>
+          <input type="text" class="form-control" id="set-sysname" placeholder="微積分助教成績系統">
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h4><i class="fas fa-user-tie"></i> 助教名稱設定</h4>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">設定右上角下拉選單中的助教名稱（最多 5 位），修改後立即生效。</p>
+        <div id="ta-names-list"></div>
+        <button class="btn btn-outline btn-sm" onclick="addTAField()" style="margin-top:10px"><i class="fas fa-plus"></i> 新增助教</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toast-container"></div>
+
+<!-- ===== STUDENT MODAL ===== -->
+<div class="modal-overlay" id="student-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="student-modal-title">新增學生</h3>
+      <button class="modal-close" onclick="closeModal('student-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>學號 *</label>
+          <input type="text" class="form-control" id="s-id" placeholder="例：B10012345">
+        </div>
+        <div class="form-group">
+          <label>姓名 *</label>
+          <input type="text" class="form-control" id="s-name" placeholder="例：王小明">
+        </div>
+        <div class="form-group">
+          <label>班級 *</label>
+          <input type="text" class="form-control" id="s-class" placeholder="例：資工一甲">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('student-modal')">取消</button>
+      <button class="btn btn-primary" onclick="saveStudent()"><i class="fas fa-save"></i> 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ASSIGNMENT MODAL ===== -->
+<div class="modal-overlay" id="assignment-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="assign-modal-title">新增作業/測驗</h3>
+      <button class="modal-close" onclick="closeModal('assignment-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>測驗 ID *</label>
+          <input type="text" class="form-control" id="a-test-id" placeholder="例：HW01">
+        </div>
+        <div class="form-group">
+          <label>名稱 *</label>
+          <input type="text" class="form-control" id="a-name" placeholder="例：第一次作業">
+        </div>
+        <div class="form-group">
+          <label>類型</label>
+          <select class="form-control" id="a-type">
+            <option value="homework">作業</option>
+            <option value="quiz">小考</option>
+            <option value="exam">期中/期末</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>日期</label>
+          <input type="date" class="form-control" id="a-date">
+        </div>
+        <div class="form-group">
+          <label>滿分</label>
+          <input type="number" class="form-control" id="a-max-score" value="100" min="1">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>描述</label>
+          <textarea class="form-control" id="a-desc" rows="3"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('assignment-modal')">取消</button>
+      <button class="btn btn-primary" onclick="saveAssignment()"><i class="fas fa-save"></i> 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== XLSX IMPORT MODAL ===== -->
+<div class="modal-overlay" id="xlsx-modal">
+  <div class="modal" style="width:600px">
+    <div class="modal-header">
+      <h3>匯入學生名單 (.xlsx / .csv)</h3>
+      <button class="modal-close" onclick="closeModal('xlsx-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('xlsx-file').click()"
+           ondragover="event.preventDefault();this.classList.add('dragover')"
+           ondragleave="this.classList.remove('dragover')"
+           ondrop="handleXlsxDrop(event)">
+        <i class="fas fa-file-excel"></i>
+        <p><strong>點擊選擇檔案</strong> 或拖曳至此</p>
+        <p style="margin-top:6px">支援 .xlsx、.xls、.csv 格式</p>
+        <input type="file" id="xlsx-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleXlsxFile(this.files[0])">
+      </div>
+      <div id="xlsx-preview" style="margin-top:16px;display:none">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px">
+          預覽（前 5 筆）— 欄位對應：
+          <span class="badge badge-primary">學號</span>
+          <span class="badge badge-primary">姓名</span>
+          <span class="badge badge-primary">班級</span>
+        </div>
+        <div class="table-wrapper">
+          <table><thead><tr id="xlsx-header-row"></tr></thead><tbody id="xlsx-preview-body"></tbody></table>
+        </div>
+        <div style="margin-top:10px;font-size:13px">
+          共 <strong id="xlsx-total-rows">0</strong> 筆資料。
+          <span style="color:var(--muted)">請確認欄位對應後點擊「確認匯入」。</span>
+        </div>
+        <div class="form-grid" style="margin-top:14px">
+          <div class="form-group">
+            <label>學號 欄 *</label>
+            <select class="form-control" id="col-sid"></select>
+          </div>
+          <div class="form-group">
+            <label>姓名 欄 *</label>
+            <select class="form-control" id="col-sname"></select>
+          </div>
+          <div class="form-group">
+            <label>班級 欄（選填）</label>
+            <select class="form-control" id="col-sclass"><option value="">(無)</option></select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('xlsx-modal')">取消</button>
+      <button class="btn btn-success" id="btn-confirm-import" onclick="confirmXlsxImport()" style="display:none">
+        <i class="fas fa-file-import"></i> 確認匯入
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONFIRM DIALOG ===== -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="width:380px">
+    <div class="modal-header">
+      <h3 id="confirm-title">確認</h3>
+      <button class="modal-close" onclick="resolveConfirm(false)">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-msg" style="line-height:1.6"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="resolveConfirm(false)">取消</button>
+      <button class="btn btn-danger" onclick="resolveConfirm(true)"><i class="fas fa-check"></i> 確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== JAVASCRIPT ========== -->
+<script>
+/* =====================================================
+   SECTION 1: CONFIG & GLOBALS
+   ===================================================== */
+// 發布用後端：到 https://supabase.com 建立免費專案，在專案 Settings > API 複製 URL 與 anon key 貼到下方
+window.SUPABASE_URL = 'https://tfrunrtnyuhyefvoufxq.supabase.co';   // 例: https://xxxxx.supabase.co
+window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmcnVucnRueXVoeWVmdm91ZnhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1Njc4NjUsImV4cCI6MjA4OTE0Mzg2NX0.ERjCbhg_cr2IiTEefXb0XQ2Bkhs564wKNmcf3bsRwsU';  // 例: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+const API = (path) => `tables/${path}`;
+let _supabase = null;
+function getSupabase() {
+  if (_supabase) return _supabase;
+  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) return null;
+  if (typeof window.supabase === 'undefined') return null;
+  try {
+    _supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    return _supabase;
+  } catch (e) {
+    console.warn('Supabase init failed:', e);
+    return null;
+  }
+}
+function useSupabase() { return !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY); }
+
+let currentPage = 'home';
+let studentEditId = null;
+let assignmentEditId = null;
+let xlsxData = [];          // raw rows from xlsx
+let xlsxHeaders = [];
+let gradeRows = [];         // [{student, gradeId, score, note, dirty, saved}]
+let currentAssignment = null;
+let queryTab = 'student';
+let confirmResolve = null;
+let studentsPage = 1;
+let assignmentsPage = 1;
+
+// Cache
+let _studentsCache = null;
+let _assignmentsCache = null;
+let _gradesCache = null;
+
+/* =====================================================
+   SECTION 2: SETTINGS (localStorage)
+   ===================================================== */
+function getSettings() {
+  try {
+    const s = localStorage.getItem('calc_ta_settings');
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return {
+    sysName: '微積分助教成績系統',
+    taNames: ['助教 A', '助教 B']
+  };
+}
+
+function saveSettings() {
+  const sysName = document.getElementById('set-sysname').value.trim() || '微積分助教成績系統';
+  const inputs = document.querySelectorAll('.ta-name-input');
+  const taNames = [];
+  inputs.forEach(inp => {
+    const v = inp.value.trim();
+    if (v) taNames.push(v);
+  });
+  if (taNames.length === 0) { showToast('至少需要一位助教名稱', 'error'); return; }
+  const settings = { sysName, taNames };
+  localStorage.setItem('calc_ta_settings', JSON.stringify(settings));
+  applySettings(settings);
+  showToast('設定已儲存', 'success');
+}
+
+function applySettings(settings) {
+  document.getElementById('sys-name').textContent = settings.sysName;
+  document.title = settings.sysName;
+  // Rebuild TA select
+  const sel = document.getElementById('ta-select');
+  const current = sel.value;
+  sel.innerHTML = settings.taNames.map(n => `<option value="${n}">${n}</option>`).join('');
+  if (settings.taNames.includes(current)) sel.value = current;
+  else sel.value = settings.taNames[0];
+  updateTABadge();
+}
+
+function loadSettingsPage() {
+  const s = getSettings();
+  document.getElementById('set-sysname').value = s.sysName;
+  renderTANamesList(s.taNames);
+}
+
+function renderTANamesList(names) {
+  const container = document.getElementById('ta-names-list');
+  container.innerHTML = names.map((n, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <span style="color:var(--muted);font-size:13px;width:60px">助教 ${i+1}</span>
+      <input type="text" class="form-control ta-name-input" value="${escHtml(n)}" style="max-width:220px" placeholder="助教名稱">
+      <button class="btn btn-danger btn-sm" onclick="removeTAField(${i})" ${names.length<=1?'disabled':''}><i class="fas fa-times"></i></button>
+    </div>
+  `).join('');
+}
+
+function addTAField() {
+  const inputs = document.querySelectorAll('.ta-name-input');
+  if (inputs.length >= 5) { showToast('最多 5 位助教', 'warning'); return; }
+  const names = Array.from(inputs).map(i => i.value.trim() || '未命名');
+  names.push('新助教');
+  renderTANamesList(names);
+}
+
+function removeTAField(idx) {
+  const inputs = document.querySelectorAll('.ta-name-input');
+  if (inputs.length <= 1) return;
+  const names = Array.from(inputs).map(i => i.value.trim() || '未命名');
+  names.splice(idx, 1);
+  renderTANamesList(names);
+}
+
+/* =====================================================
+   SECTION 3: TA SELECTOR
+   ===================================================== */
+function initTASelector() {
+  const settings = getSettings();
+  applySettings(settings);
+  const saved = localStorage.getItem('current_ta');
+  const sel = document.getElementById('ta-select');
+  if (saved && Array.from(sel.options).some(o => o.value === saved)) {
+    sel.value = saved;
+  }
+  updateTABadge();
+}
+
+function onTAChange() {
+  const v = document.getElementById('ta-select').value;
+  localStorage.setItem('current_ta', v);
+  updateTABadge();
+}
+
+function updateTABadge() {
+  const v = document.getElementById('ta-select').value;
+  document.getElementById('ta-badge').textContent = v;
+}
+
+function getCurrentTA() {
+  return document.getElementById('ta-select').value;
+}
+
+/* =====================================================
+   SECTION 4: NAVIGATION (SPA)
+   ===================================================== */
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`)?.classList.add('active');
+  document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
+  currentPage = page;
+  // Load data per page
+  switch(page) {
+    case 'home': loadHome(); break;
+    case 'students': studentsPage=1; loadStudents(); break;
+    case 'assignments': assignmentsPage=1; loadAssignments(); break;
+    case 'grades': initGradesPage(); break;
+    case 'query': initQueryPage(); break;
+    case 'settings': loadSettingsPage(); break;
+  }
+  window.scrollTo(0,0);
+}
+
+/* =====================================================
+   SECTION 5: API HELPERS (Supabase 或原有 tables/)
+   ===================================================== */
+function parseApiPath(path) {
+  const [base, qs] = path.split('?');
+  const parts = base.split('/').filter(Boolean);
+  const table = parts[0];
+  const id = parts[1] || null;
+  const query = {};
+  if (qs) qs.split('&').forEach(p => { const [k,v] = p.split('='); query[decodeURIComponent(k)] = v && decodeURIComponent(v); });
+  return { table, id, query };
+}
+
+async function supabaseApiGet(path) {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase 未載入，請檢查網路或稍後再試');
+  const { table, id, query } = parseApiPath(path);
+  const page = parseInt(query.page) || 1;
+  const limit = Math.min(parseInt(query.limit) || 500, 500);
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+  if (id) {
+    const { data, error } = await sb.from(table).select('*').eq('id', id).single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+  let q = sb.from(table).select('*', { count: 'exact' });
+  if (query.search && table === 'students') {
+    const kw = query.search;
+    q = q.or(`student_id.ilike.%${kw}%,name.ilike.%${kw}%,class_name.ilike.%${kw}%`);
+  }
+  if (query.search && table === 'assignments') {
+    const kw = query.search;
+    q = q.or(`test_id.ilike.%${kw}%,name.ilike.%${kw}%,description.ilike.%${kw}%`);
+  }
+  if (query.assignment_id && table === 'grades') q = q.eq('assignment_id', query.assignment_id);
+  if (query.sort && table === 'assignments') q = q.order('date', { ascending: false });
+  q = q.range(from, to);
+  const { data, error, count } = await q;
+  if (error) throw new Error(error.message);
+  return { data: data || [], total: count ?? (data ? data.length : 0) };
+}
+
+async function supabaseApiPost(path, body) {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase 未設定');
+  const { table } = parseApiPath(path);
+  const row = { ...body, id: body.id || crypto.randomUUID() };
+  const { data, error } = await sb.from(table).insert(row).select().single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function supabaseApiPut(path, body) {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase 未設定');
+  const { table, id } = parseApiPath(path);
+  if (!id) throw new Error('PUT 需要 id');
+  const { data, error } = await sb.from(table).update(body).eq('id', id).select().single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function supabaseApiDelete(path) {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Supabase 未設定');
+  const { table, id } = parseApiPath(path);
+  if (!id) throw new Error('DELETE 需要 id');
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  return {};
+}
+
+async function apiGet(path) {
+  if (useSupabase()) return supabaseApiGet(path);
+  const r = await fetch(API(path));
+  if (!r.ok) throw new Error(`GET ${path} → ${r.status}`);
+  return r.json();
+}
+async function apiPost(path, body) {
+  if (useSupabase()) return supabaseApiPost(path, body);
+  const r = await fetch(API(path), { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>{}); throw new Error(e?.detail||`POST ${path} → ${r.status}`); }
+  return r.json();
+}
+async function apiPut(path, body) {
+  if (useSupabase()) return supabaseApiPut(path, body);
+  const r = await fetch(API(path), { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>{}); throw new Error(e?.detail||`PUT ${path} → ${r.status}`); }
+  return r.json();
+}
+async function apiDelete(path) {
+  if (useSupabase()) { await supabaseApiDelete(path); return; }
+  const r = await fetch(API(path), { method:'DELETE' });
+  if (!r.ok) throw new Error(`DELETE ${path} → ${r.status}`);
+}
+
+async function getAllPages(tableOrPath) {
+  let table = tableOrPath;
+  let extra = '';
+  if (tableOrPath.includes('?')) {
+    const i = tableOrPath.indexOf('?');
+    table = tableOrPath.slice(0, i);
+    extra = tableOrPath.slice(i);
+  }
+  let page = 1, all = [];
+  while (true) {
+    const res = await apiGet(`${table}?page=${page}&limit=500${extra ? '&' + extra.replace(/^\?/, '') : ''}`);
+    const list = res.data || (Array.isArray(res) ? res : []);
+    all = all.concat(list);
+    if (!list.length || list.length < 500) break;
+    page++;
+  }
+  return all;
+}
+
+/* =====================================================
+   SECTION 6: TOAST & CONFIRM
+   ===================================================== */
+function showToast(msg, type='info') {
+  const icons = { success:'check-circle', error:'times-circle', info:'info-circle', warning:'exclamation-triangle' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<i class="fas fa-${icons[type]||'info-circle'}"></i> ${msg}`;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function confirmDialog(title, msg) {
+  return new Promise(res => {
+    confirmResolve = res;
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = msg;
+    document.getElementById('confirm-modal').classList.add('open');
+  });
+}
+function resolveConfirm(val) {
+  document.getElementById('confirm-modal').classList.remove('open');
+  if (confirmResolve) confirmResolve(val);
+  confirmResolve = null;
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+/* =====================================================
+   SECTION 7: UTILS
+   ===================================================== */
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function highlight(text, kw) {
+  if (!kw) return escHtml(text);
+  const re = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+  return escHtml(text).replace(re, m => `<mark>${m}</mark>`);
+}
+function formatDate(s) {
+  if (!s) return '-';
+  return String(s).slice(0,10);
+}
+function dash(v) { return v ?? '-'; }
+
+const TYPE_LABELS = { homework:'作業', quiz:'小考', exam:'期中/期末' };
+const TYPE_BADGES = { homework:'badge-primary', quiz:'badge-warning', exam:'badge-danger' };
+function typeBadge(t) {
+  return `<span class="badge ${TYPE_BADGES[t]||'badge-secondary'}">${TYPE_LABELS[t]||t||'-'}</span>`;
+}
+
+/* =====================================================
+   SECTION 8: CSV EXPORT
+   ===================================================== */
+function downloadCSV(rows, filename) {
+  const bom = '\uFEFF';
+  const content = bom + rows.map(r => r.map(c => `"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type:'text/csv;charset=utf-8;' }));
+  a.download = filename;
+  a.click();
+}
+
+/* =====================================================
+   SECTION 9: HOME PAGE
+   ===================================================== */
+async function loadHome() {
+  document.getElementById('today-date').textContent = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+  try {
+    const [sR, aR, gR] = await Promise.all([
+      apiGet('students?page=1&limit=1'),
+      apiGet('assignments?page=1&limit=1'),
+      apiGet('grades?page=1&limit=1')
+    ]);
+    document.getElementById('stat-students').textContent = sR.total ?? 0;
+    document.getElementById('stat-assignments').textContent = aR.total ?? 0;
+    document.getElementById('stat-grades').textContent = gR.total ?? 0;
+    // Avg
+    const allGrades = await getAllPages('grades');
+    const scores = allGrades.map(g => parseFloat(g.score)).filter(n => !isNaN(n));
+    document.getElementById('stat-avg').textContent = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '-';
+  } catch(e) { console.error(e); }
+
+  // Recent assignments（失敗時也要清掉「載入中...」讓畫面可操作）
+  const tbody = document.getElementById('recent-body');
+  try {
+    const res = await apiGet('assignments?page=1&limit=100&sort=date');
+    const items = (res.data||[]).sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0,5);
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-inbox"></i> 尚無作業/測驗</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(a => `
+      <tr>
+        <td>${escHtml(a.test_id||'-')}</td>
+        <td>${escHtml(a.name)}</td>
+        <td>${typeBadge(a.type)}</td>
+        <td>${formatDate(a.date)}</td>
+        <td>${dash(a.max_score)}</td>
+        <td><button class="btn btn-sm btn-primary" onclick="navigate('grades');setTimeout(()=>selectAssignmentById('${a.id}'),400)"><i class="fas fa-edit"></i> 登記</button></td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    console.error('最近作業載入失敗:', e);
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-exclamation-circle"></i> 載入失敗，請檢查網路或重新整理</td></tr>';
+  }
+}
+
+/* =====================================================
+   SECTION 10: STUDENTS
+   ===================================================== */
+async function loadStudents() {
+  showLoading('students-loading', true);
+  try {
+    const kw = document.getElementById('student-search').value.trim();
+    const cls = document.getElementById('student-class-filter').value;
+    const url = `students?page=${studentsPage}&limit=20${kw?`&search=${encodeURIComponent(kw)}`:''}`;
+    const res = await apiGet(url);
+    let rows = res.data || [];
+    if (cls) rows = rows.filter(s => s.class_name === cls);
+
+    // Populate class filter
+    const allStu = await getAllPages('students');
+    const classes = [...new Set(allStu.map(s=>s.class_name).filter(Boolean))].sort();
+    const cf = document.getElementById('student-class-filter');
+    const prevCls = cf.value;
+    cf.innerHTML = '<option value="">所有班級</option>' + classes.map(c=>`<option value="${escHtml(c)}" ${c===prevCls?'selected':''}>${escHtml(c)}</option>`).join('');
+
+    renderStudentsTable(rows, kw);
+    renderPagination('students-pagination', res.total??rows.length, studentsPage, 20, p=>{studentsPage=p;loadStudents();});
+  } catch(e) { showToast('載入學生失敗: '+e.message, 'error'); }
+  showLoading('students-loading', false);
+}
+
+function renderStudentsTable(rows, kw='') {
+  const tbody = document.getElementById('students-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-user-slash"></i> 沒有找到學生</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((s,i) => `
+    <tr>
+      <td>${(studentsPage-1)*20+i+1}</td>
+      <td>${highlight(s.student_id||'', kw)}</td>
+      <td>${highlight(s.name||'', kw)}</td>
+      <td>${highlight(s.class_name||'', kw)}</td>
+      <td style="color:var(--muted);font-size:12px">${new Date(s.created_at).toLocaleDateString('zh-TW')}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="openStudentModal('${s.id}')"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s.id}', '${escHtml(s.name)}')"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openStudentModal(id) {
+  studentEditId = id || null;
+  document.getElementById('student-modal-title').textContent = id ? '編輯學生' : '新增學生';
+  if (id) {
+    apiGet(`students/${id}`).then(s => {
+      document.getElementById('s-id').value = s.student_id || '';
+      document.getElementById('s-name').value = s.name || '';
+      document.getElementById('s-class').value = s.class_name || '';
+      openModal('student-modal');
+    }).catch(e => showToast(e.message, 'error'));
+  } else {
+    document.getElementById('s-id').value = '';
+    document.getElementById('s-name').value = '';
+    document.getElementById('s-class').value = '';
+    openModal('student-modal');
+  }
+}
+
+async function saveStudent() {
+  const student_id = document.getElementById('s-id').value.trim();
+  const name = document.getElementById('s-name').value.trim();
+  const class_name = document.getElementById('s-class').value.trim();
+  if (!student_id || !name || !class_name) { showToast('請填寫所有必填欄位', 'error'); return; }
+  try {
+    if (studentEditId) {
+      await apiPut(`students/${studentEditId}`, { student_id, name, class_name });
+      showToast('學生資料已更新', 'success');
+    } else {
+      await apiPost('students', { student_id, name, class_name });
+      showToast('學生已新增', 'success');
+    }
+    closeModal('student-modal');
+    loadStudents();
+  } catch(e) { showToast('儲存失敗: '+e.message, 'error'); }
+}
+
+async function deleteStudent(id, name) {
+  if (!await confirmDialog('刪除學生', `確定要刪除「${name}」嗎？相關成績資料將一併刪除。`)) return;
+  try {
+    await apiDelete(`students/${id}`);
+    showToast('已刪除', 'success');
+    loadStudents();
+  } catch(e) { showToast('刪除失敗', 'error'); }
+}
+
+function exportStudentsCSV() {
+  getAllPages('students').then(rows => {
+    const headers = ['學號','姓名','班級'];
+    const data = rows.map(s => [s.student_id||'', s.name||'', s.class_name||'']);
+    downloadCSV([headers, ...data], '學生名單.csv');
+    showToast('已匯出 CSV', 'success');
+  });
+}
+
+/* =====================================================
+   SECTION 11: XLSX IMPORT
+   ===================================================== */
+function openXlsxImport() {
+  xlsxData = []; xlsxHeaders = [];
+  document.getElementById('xlsx-file').value = '';
+  document.getElementById('xlsx-preview').style.display = 'none';
+  document.getElementById('btn-confirm-import').style.display = 'none';
+  document.getElementById('drop-zone').classList.remove('dragover');
+  openModal('xlsx-modal');
+}
+
+function handleXlsxDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleXlsxFile(file);
+}
+
+function handleXlsxFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type:'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      if (json.length < 2) { showToast('檔案沒有資料', 'error'); return; }
+      xlsxHeaders = json[0].map(String);
+      xlsxData = json.slice(1).filter(r => r.some(c => c !== ''));
+      showXlsxPreview();
+    } catch(err) { showToast('讀取失敗: '+err.message, 'error'); }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function showXlsxPreview() {
+  document.getElementById('xlsx-preview').style.display = 'block';
+  document.getElementById('btn-confirm-import').style.display = 'inline-flex';
+  document.getElementById('xlsx-total-rows').textContent = xlsxData.length;
+
+  // Header row
+  document.getElementById('xlsx-header-row').innerHTML =
+    xlsxHeaders.map(h => `<th>${escHtml(h)}</th>`).join('');
+  // Preview rows
+  document.getElementById('xlsx-preview-body').innerHTML =
+    xlsxData.slice(0,5).map(r => `<tr>${xlsxHeaders.map((_,i)=>`<td>${escHtml(r[i]??'')}</td>`).join('')}</tr>`).join('');
+
+  // Column selectors
+  const optHtml = xlsxHeaders.map((h,i) => `<option value="${i}">${escHtml(h)}</option>`).join('');
+  ['col-sid','col-sname','col-sclass'].forEach(id => {
+    const el = document.getElementById(id);
+    const base = id === 'col-sclass' ? '<option value="">(無)</option>' : '';
+    el.innerHTML = base + optHtml;
+  });
+  // Smart guess
+  xlsxHeaders.forEach((h,i) => {
+    const lower = h.toLowerCase();
+    if (/學號|id|student.*id|sid/.test(lower)) document.getElementById('col-sid').value = i;
+    if (/姓名|name/.test(lower)) document.getElementById('col-sname').value = i;
+    if (/班級|class/.test(lower)) document.getElementById('col-sclass').value = i;
+  });
+}
+
+async function confirmXlsxImport() {
+  const sidCol = parseInt(document.getElementById('col-sid').value);
+  const snameCol = parseInt(document.getElementById('col-sname').value);
+  const sclassColVal = document.getElementById('col-sclass').value;
+  const sclassCol = sclassColVal === '' ? null : parseInt(sclassColVal);
+
+  const toImport = xlsxData.map(r => ({
+    student_id: String(r[sidCol]??'').trim(),
+    name: String(r[snameCol]??'').trim(),
+    class_name: sclassCol !== null ? String(r[sclassCol]??'').trim() : ''
+  })).filter(s => s.student_id && s.name);
+
+  if (!toImport.length) { showToast('沒有有效資料', 'error'); return; }
+
+  const ok = await confirmDialog('確認匯入', `即將匯入 ${toImport.length} 位學生，已存在的學號將略過。`);
+  if (!ok) return;
+
+  const existing = await getAllPages('students');
+  const existIds = new Set(existing.map(s => s.student_id));
+  const newStudents = toImport.filter(s => !existIds.has(s.student_id));
+
+  let count = 0;
+  for (const s of newStudents) {
+    try { await apiPost('students', s); count++; } catch(e) {}
+  }
+  closeModal('xlsx-modal');
+  showToast(`匯入完成：新增 ${count} 位，略過 ${toImport.length - count} 位（重複）`, 'success');
+  loadStudents();
+}
+
+/* =====================================================
+   SECTION 12: ASSIGNMENTS
+   ===================================================== */
+async function loadAssignments() {
+  showLoading('assignments-loading', true);
+  try {
+    const kw = document.getElementById('assign-search').value.trim();
+    const type = document.getElementById('assign-type-filter').value;
+    const url = `assignments?page=${assignmentsPage}&limit=20${kw?`&search=${encodeURIComponent(kw)}`:''}`;
+    const res = await apiGet(url);
+    let rows = res.data || [];
+    if (type) rows = rows.filter(a => a.type === type);
+    renderAssignmentsTable(rows, kw);
+    renderPagination('assignments-pagination', res.total??rows.length, assignmentsPage, 20, p=>{assignmentsPage=p;loadAssignments();});
+  } catch(e) { showToast('載入失敗: '+e.message, 'error'); }
+  showLoading('assignments-loading', false);
+}
+
+function renderAssignmentsTable(rows, kw='') {
+  const tbody = document.getElementById('assignments-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><i class="fas fa-inbox"></i> 沒有作業/測驗</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((a,i) => `
+    <tr>
+      <td>${(assignmentsPage-1)*20+i+1}</td>
+      <td><code>${escHtml(a.test_id||'-')}</code></td>
+      <td>${highlight(a.name||'',kw)}</td>
+      <td>${typeBadge(a.type)}</td>
+      <td>${formatDate(a.date)}</td>
+      <td>${dash(a.max_score)}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(a.description||'')}">${highlight(a.description||'',kw)||'-'}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="openAssignmentModal('${a.id}')"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="deleteAssignment('${a.id}','${escHtml(a.name)}')"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openAssignmentModal(id) {
+  assignmentEditId = id || null;
+  document.getElementById('assign-modal-title').textContent = id ? '編輯作業/測驗' : '新增作業/測驗';
+  if (id) {
+    apiGet(`assignments/${id}`).then(a => {
+      document.getElementById('a-test-id').value = a.test_id || '';
+      document.getElementById('a-name').value = a.name || '';
+      document.getElementById('a-type').value = a.type || 'homework';
+      document.getElementById('a-date').value = formatDate(a.date);
+      document.getElementById('a-max-score').value = a.max_score || 100;
+      document.getElementById('a-desc').value = a.description || '';
+      openModal('assignment-modal');
+    }).catch(e => showToast(e.message,'error'));
+  } else {
+    document.getElementById('a-test-id').value = '';
+    document.getElementById('a-name').value = '';
+    document.getElementById('a-type').value = 'homework';
+    document.getElementById('a-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('a-max-score').value = 100;
+    document.getElementById('a-desc').value = '';
+    openModal('assignment-modal');
+  }
+}
+
+async function saveAssignment() {
+  const test_id = document.getElementById('a-test-id').value.trim();
+  const name = document.getElementById('a-name').value.trim();
+  if (!test_id || !name) { showToast('測驗 ID 和名稱為必填', 'error'); return; }
+  const body = {
+    test_id, name,
+    type: document.getElementById('a-type').value,
+    date: document.getElementById('a-date').value || null,
+    max_score: parseInt(document.getElementById('a-max-score').value) || 100,
+    description: document.getElementById('a-desc').value.trim()
+  };
+  try {
+    if (assignmentEditId) {
+      await apiPut(`assignments/${assignmentEditId}`, body);
+      showToast('已更新', 'success');
+    } else {
+      await apiPost('assignments', body);
+      showToast('已新增', 'success');
+    }
+    closeModal('assignment-modal');
+    loadAssignments();
+  } catch(e) { showToast('儲存失敗: '+e.message, 'error'); }
+}
+
+async function deleteAssignment(id, name) {
+  if (!await confirmDialog('刪除', `確定刪除「${name}」？`)) return;
+  try { await apiDelete(`assignments/${id}`); showToast('已刪除','success'); loadAssignments(); }
+  catch(e) { showToast('刪除失敗','error'); }
+}
+
+/* =====================================================
+   SECTION 13: GRADES PAGE
+   ===================================================== */
+async function initGradesPage() {
+  // Populate assignment dropdown
+  try {
+    const res = await getAllPages('assignments');
+    const sel = document.getElementById('grade-assign-select');
+    sel.innerHTML = '<option value="">-- 請選擇 --</option>' +
+      res.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(a =>
+        `<option value="${a.id}">${escHtml(a.test_id)} - ${escHtml(a.name)} (${formatDate(a.date)})</option>`
+      ).join('');
+
+    // Populate class filter
+    const stu = await getAllPages('students');
+    const classes = [...new Set(stu.map(s=>s.class_name).filter(Boolean))].sort();
+    const cf = document.getElementById('grade-class-filter');
+    cf.innerHTML = '<option value="">所有班級</option>' +
+      classes.map(c=>`<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+  } catch(e) {}
+}
+
+async function loadGradeSheet() {
+  const assignId = document.getElementById('grade-assign-select').value;
+  if (!assignId) {
+    document.getElementById('grades-body').innerHTML =
+      '<tr><td colspan="7" class="empty-state"><i class="fas fa-hand-point-up"></i> 請先選擇作業/測驗</td></tr>';
+    document.getElementById('grade-progress-wrap').style.display = 'none';
+    document.getElementById('btn-save-all').style.display = 'none';
+    document.getElementById('btn-export-grades').style.display = 'none';
+    return;
+  }
+  showLoading('grades-loading', true);
+  try {
+    currentAssignment = await apiGet(`assignments/${assignId}`);
+    document.getElementById('grade-max').textContent = currentAssignment.max_score || 100;
+
+    const [students, existingGrades] = await Promise.all([
+      getAllPages('students'),
+      getAllPages(`grades?assignment_id=${assignId}`)  // filtered server-side if supported, else client filter
+    ]);
+
+    // Client-side filter by assignment_id
+    const gMap = {};
+    existingGrades.filter(g=>g.assignment_id===assignId).forEach(g => { gMap[g.student_id] = g; });
+
+    gradeRows = students.sort((a,b)=>(a.class_name||'').localeCompare(b.class_name||'')||(a.student_id||'').localeCompare(b.student_id||'')).map(s => ({
+      student: s,
+      gradeId: gMap[s.id]?.id || null,
+      score: gMap[s.id]?.score ?? '',
+      note: gMap[s.id]?.note || '',
+      dirty: false,
+      saved: !!gMap[s.id]
+    }));
+
+    filterGradeRows();
+    document.getElementById('grade-progress-wrap').style.display = 'block';
+    document.getElementById('btn-save-all').style.display = 'inline-flex';
+    document.getElementById('btn-export-grades').style.display = 'inline-flex';
+    updateGradeProgress();
+  } catch(e) { showToast('載入失敗: '+e.message,'error'); }
+  showLoading('grades-loading', false);
+}
+
+async function selectAssignmentById(id) {
+  const sel = document.getElementById('grade-assign-select');
+  if (!sel) return;
+  // Make sure options are loaded
+  if (sel.options.length <= 1) await initGradesPage();
+  sel.value = id;
+  loadGradeSheet();
+}
+
+function filterGradeRows() {
+  const cls = document.getElementById('grade-class-filter').value;
+  const visible = cls ? gradeRows.filter(r => r.student.class_name === cls) : gradeRows;
+  renderGradesTable(visible);
+  updateGradeProgress();
+}
+
+function renderGradesTable(rows) {
+  const tbody = document.getElementById('grades-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-inbox"></i> 無學生資料</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r, idx) => `
+    <tr id="grow-${r.student.id}">
+      <td>${idx+1}</td>
+      <td>${escHtml(r.student.student_id||'')}</td>
+      <td>${escHtml(r.student.name||'')}</td>
+      <td>${escHtml(r.student.class_name||'')}</td>
+      <td>
+        <input type="number" class="score-input ${r.dirty?'dirty':r.saved?'saved':''}"
+               id="score-${r.student.id}"
+               value="${r.score}"
+               min="0" max="${currentAssignment?.max_score||100}"
+               onchange="onScoreChange('${r.student.id}', this.value)"
+               onkeydown="scoreKeyDown(event,'${r.student.id}')">
+      </td>
+      <td>
+        <input type="text" class="form-control" style="width:160px"
+               id="note-${r.student.id}"
+               value="${escHtml(r.note||'')}"
+               placeholder="備註"
+               onchange="onNoteChange('${r.student.id}', this.value)">
+      </td>
+      <td>
+        ${r.saved && !r.dirty
+          ? '<span class="badge badge-success"><i class="fas fa-check"></i> 已儲存</span>'
+          : r.dirty
+            ? '<span class="badge badge-warning"><i class="fas fa-pencil-alt"></i> 未儲存</span>'
+            : '<span class="badge badge-secondary">未登記</span>'
+        }
+      </td>
+    </tr>
+  `).join('');
+}
+
+function onScoreChange(studentId, val) {
+  const row = gradeRows.find(r => r.student.id === studentId);
+  if (!row) return;
+  row.score = val;
+  row.dirty = true;
+  const inp = document.getElementById(`score-${studentId}`);
+  if (inp) { inp.className = 'score-input dirty'; }
+  updateGradeProgress();
+}
+
+function onNoteChange(studentId, val) {
+  const row = gradeRows.find(r => r.student.id === studentId);
+  if (row) { row.note = val; row.dirty = true; }
+}
+
+function scoreKeyDown(event, studentId) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  const cls = document.getElementById('grade-class-filter').value;
+  const visible = cls ? gradeRows.filter(r => r.student.class_name === cls) : gradeRows;
+  const idx = visible.findIndex(r => r.student.id === studentId);
+  // Save current
+  saveSingleGrade(studentId);
+  // Focus next
+  if (idx < visible.length - 1) {
+    const nextId = visible[idx+1].student.id;
+    setTimeout(() => document.getElementById(`score-${nextId}`)?.focus(), 100);
+  }
+}
+
+async function saveSingleGrade(studentId) {
+  const row = gradeRows.find(r => r.student.id === studentId);
+  if (!row || !currentAssignment) return;
+  const score = row.score === '' ? null : parseFloat(row.score);
+  try {
+    const body = {
+      student_id: row.student.id,
+      assignment_id: currentAssignment.id,
+      score: score,
+      note: row.note || '',
+      ta: getCurrentTA()
+    };
+    if (row.gradeId) {
+      await apiPut(`grades/${row.gradeId}`, body);
+    } else {
+      const result = await apiPost('grades', body);
+      row.gradeId = result.id;
+    }
+    row.saved = score !== null;
+    row.dirty = false;
+    const inp = document.getElementById(`score-${studentId}`);
+    if (inp) inp.className = 'score-input ' + (score !== null ? 'saved' : '');
+    // Update badge
+    const row_el = document.getElementById(`grow-${studentId}`);
+    if (row_el) {
+      const badge = row_el.querySelector('td:last-child');
+      if (badge) badge.innerHTML = score !== null
+        ? '<span class="badge badge-success"><i class="fas fa-check"></i> 已儲存</span>'
+        : '<span class="badge badge-secondary">未登記</span>';
+    }
+    updateGradeProgress();
+  } catch(e) { showToast('儲存失敗: '+e.message,'error'); }
+}
+
+async function saveAllGrades() {
+  const dirtyRows = gradeRows.filter(r => r.dirty);
+  if (!dirtyRows.length) { showToast('沒有未儲存的變更', 'info'); return; }
+  showLoading('grades-loading', true);
+  let ok = 0;
+  for (const r of dirtyRows) {
+    try { await saveSingleGrade(r.student.id); ok++; } catch(e) {}
+  }
+  showLoading('grades-loading', false);
+  showToast(`已儲存 ${ok} 筆成績`, 'success');
+  updateGradeProgress();
+}
+
+function updateGradeProgress() {
+  const total = gradeRows.length;
+  const saved = gradeRows.filter(r => r.saved && r.score !== '').length;
+  document.getElementById('grade-progress-text').textContent = `${saved} / ${total}`;
+  document.getElementById('grade-progress-bar').style.width = total ? `${(saved/total)*100}%` : '0';
+}
+
+function exportGradesCSV() {
+  if (!currentAssignment) return;
+  const headers = ['學號','姓名','班級','分數','備註','助教'];
+  const rows = gradeRows.map(r => [r.student.student_id||'', r.student.name||'', r.student.class_name||'', r.score, r.note||'', r.ta||'']);
+  downloadCSV([headers,...rows], `${currentAssignment.name}_成績.csv`);
+  showToast('已匯出 CSV','success');
+}
+
+/* =====================================================
+   SECTION 14: QUERY PAGE
+   ===================================================== */
+async function initQueryPage() {
+  // Populate assignment dropdowns
+  try {
+    const res = await getAllPages('assignments');
+    const sorted = res.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const opts = sorted.map(a => `<option value="${a.id}">${escHtml(a.test_id)} - ${escHtml(a.name)}</option>`).join('');
+    document.getElementById('q-assign-select').innerHTML = '<option value="">-- 請選擇 --</option>' + opts;
+
+    // Matrix class filter
+    const stu = await getAllPages('students');
+    const classes = [...new Set(stu.map(s=>s.class_name).filter(Boolean))].sort();
+    const mc = document.getElementById('q-matrix-class');
+    mc.innerHTML = '<option value="">所有班級</option>' +
+      classes.map(c=>`<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+  } catch(e) {}
+}
+
+function switchQueryTab(tab) {
+  queryTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const tabs = ['student','assignment','matrix'];
+    b.classList.toggle('active', tabs[i]===tab);
+  });
+  document.getElementById('qtab-student').style.display = tab==='student'?'block':'none';
+  document.getElementById('qtab-assignment').style.display = tab==='assignment'?'block':'none';
+  document.getElementById('qtab-matrix').style.display = tab==='matrix'?'block':'none';
+}
+
+async function queryByStudent() {
+  const kw = document.getElementById('q-student-input').value.trim();
+  if (!kw) { showToast('請輸入學號或姓名','warning'); return; }
+  const container = document.getElementById('q-student-result');
+  container.innerHTML = '<div class="card"><div class="empty-state"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div></div>';
+  try {
+    const stuRes = await apiGet(`students?search=${encodeURIComponent(kw)}&limit=500`);
+    const students = stuRes.data || [];
+    if (!students.length) {
+      container.innerHTML = '<div class="card"><div class="empty-state"><i class="fas fa-search"></i> 找不到學生</div></div>';
+      return;
+    }
+    const assignments = await getAllPages('assignments');
+    const aMap = {}; assignments.forEach(a => aMap[a.id] = a);
+    const allGrades = await getAllPages('grades');
+
+    container.innerHTML = students.map(s => {
+      const grades = allGrades.filter(g => g.student_id === s.id);
+      const tableRows = grades.length ? grades.map(g => {
+        const a = aMap[g.assignment_id] || {};
+        const pct = a.max_score ? Math.round((g.score/a.max_score)*100) : '-';
+        return `<tr>
+          <td>${escHtml(a.test_id||'-')}</td>
+          <td>${escHtml(a.name||'-')}</td>
+          <td>${typeBadge(a.type)}</td>
+          <td>${formatDate(a.date)}</td>
+          <td>${dash(g.score)} / ${dash(a.max_score)}</td>
+          <td>${typeof pct==='number'?pct+'%':'-'}</td>
+          <td>${escHtml(g.note||'-')}</td>
+          <td>${escHtml(g.ta||'-')}</td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="8" class="empty-state">尚無成績</td></tr>`;
+
+      const scores = grades.map(g=>({score:g.score,max:aMap[g.assignment_id]?.max_score})).filter(x=>x.score!=null&&x.max);
+      const chartId = `chart-s-${s.id}`;
+      setTimeout(()=>{
+        if (!scores.length) return;
+        const el = document.getElementById(chartId);
+        if (!el) return;
+        new Chart(el, {
+          type:'bar',
+          data:{
+            labels: grades.map(g=>aMap[g.assignment_id]?.name||'-'),
+            datasets:[{
+              label:'得分率(%)',
+              data: grades.map(g=>{const a=aMap[g.assignment_id];return a?.max_score?Math.round((g.score/a.max_score)*100):null;}),
+              backgroundColor: 'rgba(74,144,217,0.7)', borderRadius:4
+            }]
+          },
+          options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}
+        });
+      },300);
+
+      return `
+        <div class="card">
+          <div class="card-title">
+            <i class="fas fa-user"></i> ${highlight(s.name||'',kw)}
+            <span style="font-weight:400;color:var(--muted);font-size:13px;margin-left:8px">
+              ${highlight(s.student_id||'',kw)} ｜ ${escHtml(s.class_name||'')}
+            </span>
+          </div>
+          <div class="table-wrapper">
+            <table><thead><tr><th>ID</th><th>名稱</th><th>類型</th><th>日期</th><th>分數/滿分</th><th>得分率</th><th>備註</th><th>登記人</th></tr></thead>
+            <tbody>${tableRows}</tbody></table>
+          </div>
+          ${scores.length?`<div style="height:220px;margin-top:16px"><canvas id="${chartId}"></canvas></div>`:''}
+        </div>`;
+    }).join('');
+  } catch(e) { container.innerHTML = `<div class="card"><div class="empty-state">${escHtml(e.message)}</div></div>`; }
+}
+
+async function queryByAssignment() {
+  const assignId = document.getElementById('q-assign-select').value;
+  if (!assignId) return;
+  const container = document.getElementById('q-assign-result');
+  container.innerHTML = '<div class="card"><div class="empty-state"><i class="fas fa-spinner fa-spin"></i> 載入中...</div></div>';
+  try {
+    const [assignment, students, allGrades] = await Promise.all([
+      apiGet(`assignments/${assignId}`),
+      getAllPages('students'),
+      getAllPages('grades')
+    ]);
+    const grades = allGrades.filter(g => g.assignment_id === assignId);
+    const gMap = {}; grades.forEach(g => gMap[g.student_id] = g);
+    const stuMap = {}; students.forEach(s => stuMap[s.id] = s);
+
+    const scores = grades.map(g=>g.score).filter(s=>s!=null);
+    const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '-';
+    const max = scores.length ? Math.max(...scores) : '-';
+    const min = scores.length ? Math.min(...scores) : '-';
+    const registered = grades.length;
+
+    const chartId = 'chart-assign-hist';
+    setTimeout(()=>{
+      if (!scores.length) return;
+      const el = document.getElementById(chartId);
+      if (!el) return;
+      const bins = [0,10,20,30,40,50,60,70,80,90,100];
+      const counts = new Array(10).fill(0);
+      scores.forEach(s=>{ const b = Math.min(Math.floor(s/10),9); counts[b]++; });
+      new Chart(el,{
+        type:'bar',
+        data:{labels:bins.slice(0,-1).map((v,i)=>`${v}-${bins[i+1]-1}`),
+          datasets:[{label:'人數',data:counts,backgroundColor:'rgba(74,144,217,.7)',borderRadius:4}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+      });
+    },300);
+
+    const tableRows = students.sort((a,b)=>(a.class_name||'').localeCompare(b.class_name||'')).map(s => {
+      const g = gMap[s.id];
+      return `<tr>
+        <td>${escHtml(s.student_id||'')}</td>
+        <td>${escHtml(s.name||'')}</td>
+        <td>${escHtml(s.class_name||'')}</td>
+        <td>${g?dash(g.score):'<span class="badge badge-secondary">未登記</span>'}</td>
+        <td>${g&&assignment.max_score?Math.round((g.score/assignment.max_score)*100)+'%':'-'}</td>
+        <td>${g?escHtml(g.note||'-'):'-'}</td>
+        <td>${g?escHtml(g.ta||'-'):'-'}</td>
+      </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-title"><i class="fas fa-chart-bar"></i> 統計資訊</div>
+        <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-users"></i></div><div class="stat-info"><div class="num">${registered}</div><div class="lbl">已登記</div></div></div>
+          <div class="stat-card"><div class="stat-icon green"><i class="fas fa-calculator"></i></div><div class="stat-info"><div class="num">${avg}</div><div class="lbl">平均分</div></div></div>
+          <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-arrow-up"></i></div><div class="stat-info"><div class="num">${max}</div><div class="lbl">最高分</div></div></div>
+          <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-arrow-down"></i></div><div class="stat-info"><div class="num">${min}</div><div class="lbl">最低分</div></div></div>
+        </div>
+        ${scores.length?`<div style="height:200px;margin:16px 0"><canvas id="${chartId}"></canvas></div>`:''}
+        <div class="table-wrapper" style="margin-top:16px">
+          <table><thead><tr><th>學號</th><th>姓名</th><th>班級</th><th>分數</th><th>得分率</th><th>備註</th><th>登記人</th></tr></thead>
+          <tbody>${tableRows}</tbody></table>
+        </div>
+      </div>`;
+  } catch(e) { container.innerHTML = `<div class="card"><div class="empty-state">${escHtml(e.message)}</div></div>`; }
+}
+
+async function loadMatrix() {
+  const cls = document.getElementById('q-matrix-class').value;
+  const container = document.getElementById('q-matrix-result');
+  container.innerHTML = '<div class="card"><div class="empty-state"><i class="fas fa-spinner fa-spin"></i> 載入中...</div></div>';
+  try {
+    const [students, assignments, allGrades] = await Promise.all([
+      getAllPages('students'),
+      getAllPages('assignments'),
+      getAllPages('grades')
+    ]);
+    let filteredStu = cls ? students.filter(s=>s.class_name===cls) : students;
+    filteredStu.sort((a,b)=>(a.class_name||'').localeCompare(b.class_name||'')||(a.student_id||'').localeCompare(b.student_id||''));
+    const sortedAssign = assignments.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const gMap = {};
+    allGrades.forEach(g=>{ if(!gMap[g.student_id]) gMap[g.student_id]={}; gMap[g.student_id][g.assignment_id]=g.score; });
+
+    const thead = `<tr><th>學號</th><th>姓名</th><th>班級</th>${sortedAssign.map(a=>`<th title="${escHtml(a.name)}">${escHtml(a.test_id||a.name)}<br><small style="font-weight:400;color:var(--muted)">${dash(a.max_score)}</small></th>`).join('')}<th>平均</th></tr>`;
+    const tbody = filteredStu.map(s => {
+      const scores = sortedAssign.map(a => gMap[s.id]?.[a.id]);
+      const validScores = scores.filter(sc=>sc!=null);
+      const avg = validScores.length ? (validScores.reduce((a,b)=>a+b,0)/validScores.length).toFixed(1) : '-';
+      const cells = sortedAssign.map((a,i) => {
+        const sc = scores[i];
+        if (sc == null) return `<td style="color:var(--muted);text-align:center">-</td>`;
+        const pct = a.max_score ? sc/a.max_score : 0;
+        const color = pct>=0.9?'#d4edda':pct>=0.6?'#fff3cd':'#f8d7da';
+        return `<td style="text-align:center;background:${color}">${sc}</td>`;
+      }).join('');
+      return `<tr><td>${escHtml(s.student_id||'')}</td><td>${escHtml(s.name||'')}</td><td>${escHtml(s.class_name||'')}</td>${cells}<td style="font-weight:600;text-align:center">${avg}</td></tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-title"><i class="fas fa-table"></i> 成績矩陣 — ${cls||'全部班級'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+          <span style="background:#d4edda;padding:2px 8px;border-radius:3px;margin-right:6px">≥90%</span>
+          <span style="background:#fff3cd;padding:2px 8px;border-radius:3px;margin-right:6px">60-89%</span>
+          <span style="background:#f8d7da;padding:2px 8px;border-radius:3px">&lt;60%</span>
+        </div>
+        <div class="table-wrapper"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+      </div>`;
+  } catch(e) { container.innerHTML = `<div class="card"><div class="empty-state">${escHtml(e.message)}</div></div>`; }
+}
+
+async function exportQueryCSV() {
+  try {
+    if (queryTab === 'student') {
+      const kw = document.getElementById('q-student-input').value.trim();
+      if (!kw) { showToast('請先查詢學生','warning'); return; }
+      const [stuRes, allGrades, assignments] = await Promise.all([
+        apiGet(`students?search=${encodeURIComponent(kw)}&limit=500`),
+        getAllPages('grades'),
+        getAllPages('assignments')
+      ]);
+      const aMap = {}; assignments.forEach(a=>aMap[a.id]=a);
+      const rows = [['學號','姓名','班級','測驗ID','測驗名稱','分數','滿分','備註','登記助教']];
+      (stuRes.data||[]).forEach(s => {
+        allGrades.filter(g=>g.student_id===s.id).forEach(g=>{
+          const a=aMap[g.assignment_id]||{};
+          rows.push([s.student_id||'',s.name||'',s.class_name||'',a.test_id||'',a.name||'',g.score??'',a.max_score||'',g.note||'',g.ta||'']);
+        });
+      });
+      downloadCSV(rows,'學生成績查詢.csv');
+    } else if (queryTab === 'assignment') {
+      const assignId = document.getElementById('q-assign-select').value;
+      if (!assignId) { showToast('請先選擇作業','warning'); return; }
+      const [assignment, students, allGrades] = await Promise.all([
+        apiGet(`assignments/${assignId}`),
+        getAllPages('students'),
+        getAllPages('grades')
+      ]);
+      const grades = allGrades.filter(g=>g.assignment_id===assignId);
+      const gMap = {}; grades.forEach(g=>gMap[g.student_id]=g);
+      const rows = [['學號','姓名','班級','分數','得分率','備註','登記助教']];
+      students.forEach(s=>{
+        const g=gMap[s.id];
+        rows.push([s.student_id||'',s.name||'',s.class_name||'',g?.score??'',g&&assignment.max_score?Math.round((g.score/assignment.max_score)*100)+'%':'',g?.note||'',g?.ta||'']);
+      });
+      downloadCSV(rows,`${assignment.name}_成績.csv`);
+    } else {
+      const cls = document.getElementById('q-matrix-class').value;
+      const [students, assignments, allGrades] = await Promise.all([
+        getAllPages('students'), getAllPages('assignments'), getAllPages('grades')
+      ]);
+      let filteredStu = cls ? students.filter(s=>s.class_name===cls) : students;
+      const sortedA = assignments.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      const gMap = {}; allGrades.forEach(g=>{ if(!gMap[g.student_id]) gMap[g.student_id]={}; gMap[g.student_id][g.assignment_id]=g.score; });
+      const headers = ['學號','姓名','班級',...sortedA.map(a=>a.test_id||a.name),'平均'];
+      const rows = [headers];
+      filteredStu.forEach(s=>{
+        const scores = sortedA.map(a=>gMap[s.id]?.[a.id]??'');
+        const valid = scores.filter(sc=>sc!=='');
+        const avg = valid.length?(valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1):'';
+        rows.push([s.student_id||'',s.name||'',s.class_name||'',...scores,avg]);
+      });
+      downloadCSV(rows,'成績矩陣.csv');
+    }
+    showToast('已匯出 CSV','success');
+  } catch(e) { showToast('匯出失敗: '+e.message,'error'); }
+}
+
+/* =====================================================
+   SECTION 15: PAGINATION
+   ===================================================== */
+// Store pagination callbacks by container ID
+const _paginationCallbacks = {};
+function renderPagination(containerId, total, current, perPage, callback) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const pages = Math.ceil(total / perPage);
+  _paginationCallbacks[containerId] = callback;
+  if (pages <= 1) { container.innerHTML = ''; return; }
+  let html = '<div class="pagination">';
+  html += `<button class="page-btn" onclick="_paginationCallbacks['${containerId}'](${current-1})" ${current<=1?'disabled':''}>‹</button>`;
+  for (let p = Math.max(1,current-2); p <= Math.min(pages,current+2); p++) {
+    html += `<button class="page-btn ${p===current?'active':''}" onclick="_paginationCallbacks['${containerId}'](${p})">${p}</button>`;
+  }
+  html += `<button class="page-btn" onclick="_paginationCallbacks['${containerId}'](${current+1})" ${current>=pages?'disabled':''}>›</button>`;
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+/* =====================================================
+   SECTION 16: LOADING HELPER
+   ===================================================== */
+function showLoading(id, show) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('show', show);
+}
+
+/* =====================================================
+   SECTION 17: INIT
+   ===================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    initTASelector();
+  } catch (e) { console.error('initTASelector:', e); }
+  // 確保導航函數在 window 上，讓側邊欄點擊一定能找到
+  window.navigate = navigate;
+  loadHome().catch(e => {
+    console.error('loadHome:', e);
+    document.getElementById('stat-students').textContent = '-';
+    document.getElementById('stat-assignments').textContent = '-';
+    document.getElementById('stat-grades').textContent = '-';
+    document.getElementById('stat-avg').textContent = '-';
+  });
+});
+</script>
+</body>
+</html>

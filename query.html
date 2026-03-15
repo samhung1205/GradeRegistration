@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成績查詢 — 微積分助教成績系統</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+:root{--primary:#2c4a7c;--primary-light:#3a62a7;--accent:#4a90d9;--success:#28a745;--warning:#ffc107;--danger:#dc3545;--bg:#f4f6f9;--card-bg:#fff;--border:#dee2e6;--text:#333;--text-muted:#6c757d;--sidebar-w:220px;--header-h:56px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px}body{font-family:'Noto Sans TC','Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}ul{list-style:none}
+.topbar{height:var(--header-h);background:var(--primary);color:#fff;display:flex;align-items:center;padding:0 1.5rem;gap:1rem;position:fixed;top:0;left:0;right:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,.18)}
+.topbar .logo{font-size:1.1rem;font-weight:700;white-space:nowrap}.topbar .logo span{color:var(--accent)}
+.topbar .ta-selector{margin-left:auto;display:flex;align-items:center;gap:.5rem;font-size:.88rem}
+.topbar .ta-selector label{color:#c8d8ef;white-space:nowrap}
+.topbar .ta-selector select{padding:4px 10px;border-radius:6px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:.88rem;cursor:pointer;outline:none}
+.topbar .ta-selector select option{background:var(--primary)}
+.ta-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(74,144,217,.25);border:1px solid rgba(74,144,217,.5);border-radius:20px;padding:2px 10px;font-size:.82rem;color:#aecfee}
+.ta-badge::before{content:'👤';font-size:.9em}
+.sidebar{width:var(--sidebar-w);background:#1e3560;position:fixed;top:var(--header-h);left:0;bottom:0;overflow-y:auto;padding:1.2rem 0;z-index:90}
+.sidebar .nav-section{padding:.5rem 1rem .25rem;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#6888b5;margin-top:.5rem}
+.sidebar .nav-item a{display:flex;align-items:center;gap:.6rem;padding:.6rem 1.2rem;color:#b0c4e0;font-size:.9rem;border-left:3px solid transparent;transition:all .15s}
+.sidebar .nav-item a:hover,.sidebar .nav-item a.active{background:rgba(74,144,217,.18);color:#fff;border-left-color:var(--accent);text-decoration:none}
+.sidebar .nav-item a .icon{font-size:1rem;width:1.4rem;text-align:center}
+.main-content{margin-left:var(--sidebar-w);margin-top:var(--header-h);padding:1.8rem 2rem;flex:1}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.4rem;padding-bottom:.8rem;border-bottom:2px solid var(--border)}
+.page-header h1{font-size:1.4rem;font-weight:700;color:var(--primary)}.page-header .actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:1.4rem;margin-bottom:1.2rem;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card-title{font-size:1rem;font-weight:600;color:var(--primary);margin-bottom:1rem}
+.btn{display:inline-flex;align-items:center;gap:.35rem;padding:.45rem 1rem;border-radius:6px;border:1px solid transparent;font-size:.88rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}.btn-primary:hover{background:var(--primary-light)}
+.btn-outline{background:transparent;color:var(--primary);border-color:var(--primary)}.btn-outline:hover{background:var(--primary);color:#fff}
+.btn-sm{padding:.25rem .6rem;font-size:.8rem}
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.9rem;background:var(--card-bg)}
+thead tr{background:#f0f4fa}thead th{padding:.7rem 1rem;text-align:left;font-weight:600;color:var(--primary);border-bottom:2px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid #eef0f4;transition:background .1s}tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#f5f8ff}tbody td{padding:.65rem 1rem;vertical-align:middle}
+.table-empty{text-align:center;padding:3rem;color:var(--text-muted)}
+.form-group{display:flex;flex-direction:column;gap:.3rem}
+.form-group label{font-size:.82rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
+.form-control{padding:.45rem .75rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem;color:var(--text);background:#fff;transition:border-color .15s,box-shadow .15s;font-family:inherit;width:100%}
+.form-control:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(74,144,217,.15)}
+#toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;display:flex;flex-direction:column;gap:.5rem}
+.toast{min-width:220px;max-width:340px;padding:.75rem 1rem;border-radius:8px;font-size:.88rem;font-weight:500;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.18);display:flex;align-items:center;gap:.5rem;animation:toast-in .25s ease}
+.toast.success{background:var(--success)}.toast.error{background:var(--danger)}.toast.info{background:var(--accent)}.toast.warning{background:#e09000}
+@keyframes toast-in{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.75rem;font-weight:600}
+.badge-primary{background:#dce8f8;color:var(--primary)}.badge-success{background:#d4edda;color:#155724}.badge-warning{background:#fff3cd;color:#856404}.badge-info{background:#d1ecf1;color:#0c5460}
+.text-right{text-align:right}
+/* 查詢頁專用 */
+.query-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.2rem}
+.tab-btn{padding:.55rem 1.4rem;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;font-size:.92rem;cursor:pointer;color:var(--text-muted);font-family:inherit;font-weight:500;transition:all .15s}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:700}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.student-card{background:linear-gradient(135deg,var(--primary),var(--primary-light));color:#fff;border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1rem;display:flex;gap:2rem;flex-wrap:wrap;align-items:center}
+.sc-field{display:flex;flex-direction:column}.sc-label{font-size:.75rem;opacity:.75;text-transform:uppercase}.sc-val{font-size:1.1rem;font-weight:700}
+.score-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.8rem;margin-bottom:1.2rem}
+.summary-cell{background:#f8faff;border:1px solid var(--border);border-radius:8px;padding:.8rem;text-align:center}
+.summary-cell .s-num{font-size:1.6rem;font-weight:700;color:var(--primary)}.summary-cell .s-label{font-size:.78rem;color:var(--text-muted)}
+.summary-cell.hl{border-color:var(--accent);background:#eef5ff}
+.score-cell{font-size:1rem;font-weight:700}
+.score-high{color:var(--success)}.score-low{color:var(--danger)}.score-mid{color:#e09000}
+.chart-wrap{height:280px;max-width:600px;margin:0 auto}
+@media(max-width:768px){.sidebar{width:0;overflow:hidden}.main-content{margin-left:0;padding:1rem}}
+  </style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">📐 <span>微積分</span>助教成績系統</div>
+  <div class="ta-selector">
+    <label>目前助教：</label>
+    <select id="ta-select">
+      <option value="">— 請選擇 —</option>
+      <option value="助教 A">助教 A</option>
+      <option value="助教 B">助教 B</option>
+    </select>
+    <div class="ta-badge" id="ta-badge">未選擇</div>
+  </div>
+</header>
+
+<nav class="sidebar">
+  <div class="nav-section">主選單</div>
+  <div class="nav-item"><a href="./index.html"><span class="icon">🏠</span>首頁總覽</a></div>
+  <div class="nav-section">資料管理</div>
+  <div class="nav-item"><a href="./students.html"><span class="icon">👥</span>學生名單</a></div>
+  <div class="nav-item"><a href="./assignments.html"><span class="icon">📋</span>作業/小考</a></div>
+  <div class="nav-section">成績作業</div>
+  <div class="nav-item"><a href="./grades.html"><span class="icon">✏️</span>成績登記</a></div>
+  <div class="nav-item"><a href="./query.html" class="active"><span class="icon">🔍</span>成績查詢</a></div>
+</nav>
+
+<main class="main-content">
+  <div class="page-header">
+    <h1>🔍 成績查詢</h1>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="exportAll()">📥 匯出全部成績 CSV</button>
+    </div>
+  </div>
+
+  <div class="query-tabs">
+    <button class="tab-btn active" onclick="switchTab('by-student',0)">👤 依學生查詢</button>
+    <button class="tab-btn" onclick="switchTab('by-assignment',1)">📋 依作業查詢</button>
+    <button class="tab-btn" onclick="switchTab('overview',2)">📊 總覽成績表</button>
+  </div>
+
+  <!-- Tab 1：依學生查詢 -->
+  <div class="tab-panel active" id="tab-by-student">
+    <div class="card">
+      <div class="card-title">🔍 搜尋學生</div>
+      <div style="display:flex;gap:.8rem;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:200px;">
+          <label>學號或姓名</label>
+          <input type="text" id="student-query" class="form-control" placeholder="輸入學號或姓名..." oninput="searchStudent()" />
+        </div>
+        <div class="form-group" style="flex:1;min-width:180px;">
+          <label>班級篩選</label>
+          <select id="class-query" class="form-control" onchange="searchStudent()">
+            <option value="">全部班級</option>
+          </select>
+        </div>
+      </div>
+      <div id="student-search-results" style="margin-top:.8rem;"></div>
+    </div>
+    <div id="student-detail" style="display:none;">
+      <div id="student-info-card"></div>
+      <div id="score-summary-section"></div>
+      <div class="card" id="chart-card" style="display:none;">
+        <div class="card-title">📈 成績走勢</div>
+        <div class="chart-wrap"><canvas id="scoreChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;">
+          <div class="card-title" style="margin:0;">📋 各次成績明細</div>
+          <button class="btn btn-outline btn-sm" id="export-student-btn">📥 匯出此學生成績</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>代號</th><th>名稱</th><th>類型</th><th>日期</th><th class="text-right">分數</th><th class="text-right">滿分</th><th class="text-right">得分率</th><th>備註</th><th>登記人</th></tr></thead>
+            <tbody id="student-grades-body"><tr><td colspan="9" class="table-empty">請先搜尋並選擇學生</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2：依作業查詢 -->
+  <div class="tab-panel" id="tab-by-assignment">
+    <div class="card">
+      <div class="card-title">📋 選擇作業/小考</div>
+      <div style="display:flex;gap:.8rem;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:220px;">
+          <label>作業/小考</label>
+          <select id="assignment-query" class="form-control" onchange="loadAssignmentGrades()">
+            <option value="">— 請選擇 —</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:160px;">
+          <label>班級篩選</label>
+          <select id="class-assignment-query" class="form-control" onchange="renderAssignmentTable()">
+            <option value="">全部班級</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="assignment-stats" style="display:none;">
+      <div class="score-summary" id="assignment-summary-cells"></div>
+      <div class="card" style="max-width:600px;">
+        <div class="card-title">📊 分數分布</div>
+        <div style="height:220px;"><canvas id="distChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card" id="assignment-grade-card" style="display:none;padding:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.2rem .5rem;flex-wrap:wrap;gap:.5rem;">
+        <div class="card-title" style="margin:0;" id="assignment-grade-title">成績列表</div>
+        <button class="btn btn-outline btn-sm" onclick="exportAssignmentGrades()">📥 匯出此次成績</button>
+      </div>
+      <div style="padding:0 1.2rem .8rem;">
+        <input type="text" id="assignment-student-search" class="form-control" placeholder="🔍 搜尋學生..." oninput="renderAssignmentTable()" style="max-width:260px;" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>學號</th><th>姓名</th><th>班級</th><th class="text-right">分數</th><th class="text-right">得分率</th><th>備註</th><th>登記人</th></tr></thead>
+          <tbody id="assignment-grades-body"><tr><td colspan="8" class="table-empty">請先選擇作業/小考</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 3：總覽 -->
+  <div class="tab-panel" id="tab-overview">
+    <div class="card">
+      <div class="card-title">📊 所有學生 × 所有作業/小考 成績總覽</div>
+      <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;">
+        <select id="overview-class" class="form-control" style="max-width:160px;" onchange="renderOverview()"><option value="">全部班級</option></select>
+        <button class="btn btn-outline btn-sm" onclick="exportOverview()">📥 匯出總覽 CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table id="overview-table">
+          <thead><tr id="overview-head"></tr></thead>
+          <tbody id="overview-body"><tr><td class="table-empty">載入中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+<script>
+/* ===== 共用工具 ===== */
+const TA_KEY='calcTA_currentUser';
+function getCurrentTA(){return localStorage.getItem(TA_KEY)||null}
+function setCurrentTA(n){localStorage.setItem(TA_KEY,n)}
+function initTASelector(){
+  const sel=document.getElementById('ta-select');if(!sel)return;
+  const saved=getCurrentTA();if(saved)sel.value=saved;
+  sel.addEventListener('change',()=>{setCurrentTA(sel.value);showToast('已切換為助教：'+sel.value,'info');updateTABadge()});
+  updateTABadge();
+}
+function updateTABadge(){const b=document.getElementById('ta-badge');if(!b)return;b.textContent=getCurrentTA()||'未選擇'}
+function showToast(msg,type='info',dur=3000){
+  let c=document.getElementById('toast-container');
+  const icons={success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
+  const t=document.createElement('div');t.className='toast '+type;
+  t.innerHTML='<span>'+(icons[type]||'')+'</span><span>'+msg+'</span>';
+  c.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .4s';setTimeout(()=>t.remove(),400)},dur);
+}
+function formatDate(s){if(!s)return'—';const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString('zh-TW',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-')}
+function exportCSV(rows,filename='export'){
+  const esc=v=>{const s=String(v===null||v===undefined?'':v);return(s.includes(',')||s.includes('\n')||s.includes('"'))?'"'+s.replace(/"/g,'""')+'"':s};
+  const csv=rows.map(r=>r.map(esc).join(',')).join('\r\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},500);
+}
+async function apiGet(t,p={}){const qs=new URLSearchParams(p).toString();const url='tables/'+t+(qs?'?'+qs:'');const r=await fetch(url);if(!r.ok)throw new Error('GET '+url+' 失敗：'+r.status);return r.json()}
+
+/* ===== 快取 ===== */
+let cachedStudents=[],cachedAssignments=[],cachedGrades=[];
+let currentAssignmentGrades=[],scoreChartInst=null,distChartInst=null;
+
+document.addEventListener('DOMContentLoaded',async()=>{
+  initTASelector();
+  await Promise.all([loadStudents(),loadAssignments()]);
+  await loadAllGrades();
+  renderOverview();
+});
+
+async function loadStudents(){
+  const res=await apiGet('students',{limit:500});
+  cachedStudents=res.data||[];
+  const classes=[...new Set(cachedStudents.map(s=>s.class_name).filter(Boolean))].sort();
+  ['class-query','overview-class','class-assignment-query'].forEach(id=>{
+    const sel=document.getElementById(id);if(!sel)return;
+    const cur=sel.value;
+    sel.innerHTML='<option value="">全部班級</option>'+classes.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+    sel.value=cur;
+  });
+}
+async function loadAssignments(){
+  const res=await apiGet('assignments',{limit:200});
+  cachedAssignments=(res.data||[]).sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
+  const sel=document.getElementById('assignment-query');
+  sel.innerHTML='<option value="">— 請選擇 —</option>'+cachedAssignments.map(a=>'<option value="'+a.id+'">['+a.test_id+'] '+a.title+'</option>').join('');
+}
+async function loadAllGrades(){
+  let page=1,all=[];
+  while(true){
+    const res=await apiGet('grades',{limit:500,page});
+    const chunk=res.data||[];all=all.concat(chunk);
+    if(all.length>=(res.total||0)||chunk.length<500)break;
+    page++;
+  }
+  cachedGrades=all;
+}
+
+/* ===== Tab 切換 ===== */
+function switchTab(id,idx){
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',i===idx));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+/* ===== Tab1：依學生查詢 ===== */
+function searchStudent(){
+  const kw=(document.getElementById('student-query').value||'').trim().toLowerCase();
+  const cls=document.getElementById('class-query').value;
+  if(!kw&&!cls){document.getElementById('student-search-results').innerHTML='';return}
+  const results=cachedStudents.filter(s=>{
+    const mk=!kw||(s.student_id||'').toLowerCase().includes(kw)||(s.name||'').toLowerCase().includes(kw);
+    const mc=!cls||s.class_name===cls;return mk&&mc;
+  }).slice(0,20);
+  if(!results.length){document.getElementById('student-search-results').innerHTML='<div style="color:var(--text-muted);padding:.5rem;">找不到符合的學生</div>';return}
+  document.getElementById('student-search-results').innerHTML='<div style="display:flex;flex-wrap:wrap;gap:.5rem;">'+
+    results.map(s=>'<button class="btn btn-outline btn-sm" onclick="showStudentDetail(\''+s.id+'\')"><strong>'+s.name+'</strong> <span style="color:var(--text-muted);margin-left:4px;">'+s.student_id+'</span></button>').join('')+'</div>';
+}
+
+function showStudentDetail(studentId){
+  const student=cachedStudents.find(s=>s.id===studentId);if(!student)return;
+  const grades=cachedGrades.filter(g=>g.student_record_id===studentId);
+  const gradeWithA=grades.map(g=>{
+    const a=cachedAssignments.find(a=>a.id===g.assignment_record_id)||{};
+    return{...g,assignment:a};
+  }).sort((a,b)=>new Date(a.assignment.date||0)-new Date(b.assignment.date||0));
+
+  document.getElementById('student-info-card').innerHTML=
+    '<div class="student-card">'
+    +'<div class="sc-field"><span class="sc-label">姓名</span><span class="sc-val">👤 '+student.name+'</span></div>'
+    +'<div class="sc-field"><span class="sc-label">學號</span><span class="sc-val">'+student.student_id+'</span></div>'
+    +'<div class="sc-field"><span class="sc-label">班級</span><span class="sc-val">'+(student.class_name||'—')+'</span></div>'
+    +'<div class="sc-field"><span class="sc-label">已登記成績</span><span class="sc-val">'+grades.length+' 筆</span></div>'
+    +'</div>';
+
+  const valid=gradeWithA.filter(g=>g.score!==null&&g.score!==undefined&&g.score!=='').map(g=>({score:Number(g.score),max:Number(g.assignment?.max_score||100)}));
+  const avg=valid.length>0?(valid.reduce((s,g)=>s+g.score,0)/valid.length).toFixed(1):'—';
+  const maxS=valid.length>0?Math.max(...valid.map(g=>g.score)):'—';
+  const minS=valid.length>0?Math.min(...valid.map(g=>g.score)):'—';
+  const avgPct=valid.length>0?(valid.reduce((s,g)=>s+g.score/g.max*100,0)/valid.length).toFixed(1):'—';
+
+  document.getElementById('score-summary-section').innerHTML=
+    '<div class="score-summary">'
+    +'<div class="summary-cell hl"><div class="s-num">'+avg+'</div><div class="s-label">平均分數</div></div>'
+    +'<div class="summary-cell"><div class="s-num" style="color:var(--success)">'+maxS+'</div><div class="s-label">最高分</div></div>'
+    +'<div class="summary-cell"><div class="s-num" style="color:var(--danger)">'+minS+'</div><div class="s-label">最低分</div></div>'
+    +'<div class="summary-cell hl"><div class="s-num">'+avgPct+(avgPct!=='—'?'%':'')+'</div><div class="s-label">平均得分率</div></div>'
+    +'</div>';
+
+  const tbody=document.getElementById('student-grades-body');
+  if(!gradeWithA.length){tbody.innerHTML='<tr><td colspan="9" class="table-empty">此學生尚無成績記錄</td></tr>'}
+  else{
+    tbody.innerHTML=gradeWithA.map(g=>{
+      const a=g.assignment;
+      const score=g.score===null||g.score===undefined||g.score===''?null:Number(g.score);
+      const maxSc=Number(a.max_score||100);const pct=score!==null?(score/maxSc*100).toFixed(1):'—';
+      const cls=score!==null?(score/maxSc>=.8?'score-high':score/maxSc>=.6?'score-mid':'score-low'):'';
+      return'<tr>'
+        +'<td><span class="badge badge-primary">'+(a.test_id||'—')+'</span></td>'
+        +'<td>'+(a.title||'—')+'</td>'
+        +'<td>'+(a.type==='homework'?'<span class="badge badge-success">作業</span>':'<span class="badge badge-warning">小考</span>')+'</td>'
+        +'<td>'+formatDate(a.date)+'</td>'
+        +'<td class="text-right"><span class="score-cell '+cls+'">'+(score!==null?score:'—')+'</span></td>'
+        +'<td class="text-right">'+maxSc+'</td>'
+        +'<td class="text-right">'+pct+(pct!=='—'?'%':'')+'</td>'
+        +'<td style="color:var(--text-muted);font-size:.85rem;">'+(g.note||'—')+'</td>'
+        +'<td><span class="badge badge-info">'+(g.graded_by||'—')+'</span></td>'
+        +'</tr>';
+    }).join('');
+  }
+
+  if(valid.length>=2){document.getElementById('chart-card').style.display='';drawStudentChart(gradeWithA)}
+  else document.getElementById('chart-card').style.display='none';
+
+  document.getElementById('export-student-btn').onclick=()=>exportStudentGrades(student,gradeWithA);
+  document.getElementById('student-detail').style.display='';
+  document.getElementById('student-detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function drawStudentChart(grades){
+  const labels=grades.map(g=>g.assignment?.test_id||'?');
+  const scores=grades.map(g=>g.score===''||g.score===null?null:Number(g.score));
+  const maxes=grades.map(g=>Number(g.assignment?.max_score||100));
+  if(scoreChartInst)scoreChartInst.destroy();
+  const ctx=document.getElementById('scoreChart').getContext('2d');
+  scoreChartInst=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{label:'得分',data:scores,borderColor:'#3a62a7',backgroundColor:'rgba(74,144,217,.15)',tension:.3,pointRadius:5,fill:true},{label:'滿分',data:maxes,borderColor:'#dee2e6',borderDash:[5,5],pointRadius:0,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true}}}
+  });
+}
+
+/* ===== Tab2：依作業查詢 ===== */
+function loadAssignmentGrades(){
+  const aId=document.getElementById('assignment-query').value;if(!aId)return;
+  const assignment=cachedAssignments.find(a=>a.id===aId);if(!assignment)return;
+  document.getElementById('assignment-grade-title').textContent='['+assignment.test_id+'] '+assignment.title+' — 全班成績';
+  const grades=cachedGrades.filter(g=>g.assignment_record_id===aId);
+  currentAssignmentGrades=grades.map(g=>{const s=cachedStudents.find(s=>s.id===g.student_record_id)||{};return{...g,student:s,assignment}});
+  renderAssignmentStats(assignment,currentAssignmentGrades);
+  renderAssignmentTable();
+  document.getElementById('assignment-stats').style.display='';
+  document.getElementById('assignment-grade-card').style.display='';
+}
+
+function renderAssignmentStats(assignment,grades){
+  const maxSc=Number(assignment.max_score||100);
+  const valid=grades.filter(g=>g.score!==null&&g.score!==undefined&&g.score!=='').map(g=>Number(g.score));
+  const total=cachedStudents.length,filled=valid.length;
+  const avg=filled>0?(valid.reduce((a,b)=>a+b,0)/filled).toFixed(1):'—';
+  const mx=filled>0?Math.max(...valid):'—',mn=filled>0?Math.min(...valid):'—';
+  const pass=filled>0?valid.filter(s=>s/maxSc>=.6).length:0;
+  document.getElementById('assignment-summary-cells').innerHTML=
+    '<div class="summary-cell hl"><div class="s-num">'+avg+'</div><div class="s-label">班級平均</div></div>'
+    +'<div class="summary-cell"><div class="s-num" style="color:var(--success)">'+mx+'</div><div class="s-label">最高分</div></div>'
+    +'<div class="summary-cell"><div class="s-num" style="color:var(--danger)">'+mn+'</div><div class="s-label">最低分</div></div>'
+    +'<div class="summary-cell"><div class="s-num">'+filled+'/'+total+'</div><div class="s-label">已登記人數</div></div>'
+    +'<div class="summary-cell"><div class="s-num">'+(filled>0?pass:'—')+'</div><div class="s-label">及格人數(60%)</div></div>';
+  if(filled>0){
+    const buckets=[0,0,0,0,0];
+    valid.forEach(s=>{const p=s/maxSc*100;if(p<20)buckets[0]++;else if(p<40)buckets[1]++;else if(p<60)buckets[2]++;else if(p<80)buckets[3]++;else buckets[4]++});
+    if(distChartInst)distChartInst.destroy();
+    distChartInst=new Chart(document.getElementById('distChart').getContext('2d'),{
+      type:'bar',
+      data:{labels:['0–20%','20–40%','40–60%','60–80%','80–100%'],datasets:[{label:'人數',data:buckets,backgroundColor:['#f8d7da','#ffeeba','#fff3cd','#d4edda','#d1ecf1'],borderColor:['#dc3545','#ffc107','#e09000','#28a745','#4a90d9'],borderWidth:1}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+    });
+  }
+}
+
+function renderAssignmentTable(){
+  const aId=document.getElementById('assignment-query').value;if(!aId)return;
+  const assignment=cachedAssignments.find(a=>a.id===aId);if(!assignment)return;
+  const maxSc=Number(assignment.max_score||100);
+  const cls=document.getElementById('class-assignment-query').value;
+  const kw=(document.getElementById('assignment-student-search').value||'').trim().toLowerCase();
+  const students=cachedStudents.filter(s=>{
+    const mc=!cls||s.class_name===cls;
+    const mk=!kw||(s.student_id||'').toLowerCase().includes(kw)||(s.name||'').toLowerCase().includes(kw);
+    return mc&&mk;
+  });
+  const tbody=document.getElementById('assignment-grades-body');
+  tbody.innerHTML=students.map((s,i)=>{
+    const g=currentAssignmentGrades.find(g=>g.student_record_id===s.id);
+    const score=g&&g.score!==null&&g.score!==undefined&&g.score!==''?Number(g.score):null;
+    const pct=score!==null?(score/maxSc*100).toFixed(1):'—';
+    const cls2=score!==null?(score/maxSc>=.8?'score-high':score/maxSc>=.6?'score-mid':'score-low'):'';
+    return'<tr>'
+      +'<td style="color:var(--text-muted);font-size:.8rem;">'+(i+1)+'</td>'
+      +'<td><code>'+(s.student_id||'—')+'</code></td>'
+      +'<td><strong>'+(s.name||'—')+'</strong></td>'
+      +'<td>'+(s.class_name?'<span class="badge badge-primary">'+s.class_name+'</span>':'—')+'</td>'
+      +'<td class="text-right"><span class="score-cell '+cls2+'">'+(score!==null?score:'<span style="color:#aaa">未填寫</span>')+'</span></td>'
+      +'<td class="text-right">'+pct+(pct!=='—'?'%':'')+'</td>'
+      +'<td style="color:var(--text-muted);font-size:.85rem;">'+(g?.note||'—')+'</td>'
+      +'<td>'+(g?.graded_by?'<span class="badge badge-info">'+g.graded_by+'</span>':'—')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+/* ===== Tab3：總覽 ===== */
+function renderOverview(){
+  const cls=document.getElementById('overview-class').value;
+  const students=cachedStudents.filter(s=>!cls||s.class_name===cls).sort((a,b)=>{
+    if((a.class_name||'')!==(b.class_name||''))return(a.class_name||'').localeCompare(b.class_name||'');
+    return(a.student_id||'').localeCompare(b.student_id||'');
+  });
+  const assignments=cachedAssignments;
+  document.getElementById('overview-head').innerHTML='<th>學號</th><th>姓名</th><th>班級</th>'+assignments.map(a=>'<th class="text-right" title="'+a.title+'">'+a.test_id+'</th>').join('')+'<th class="text-right">平均</th>';
+  const tbody=document.getElementById('overview-body');
+  if(!students.length){tbody.innerHTML='<tr><td colspan="'+(assignments.length+4)+'" class="table-empty">無學生資料</td></tr>';return}
+  tbody.innerHTML=students.map(s=>{
+    const cells=assignments.map(a=>{
+      const g=cachedGrades.find(g=>g.student_record_id===s.id&&g.assignment_record_id===a.id);
+      const score=g&&g.score!==null&&g.score!==''?Number(g.score):null;
+      const maxSc=Number(a.max_score||100);
+      const cls2=score!==null?(score/maxSc>=.8?'score-high':score/maxSc>=.6?'score-mid':'score-low'):'';
+      return'<td class="text-right"><span class="score-cell '+cls2+'">'+(score!==null?score:'<span style="color:#ccc">—</span>')+'</span></td>';
+    }).join('');
+    const valid=assignments.map(a=>{const g=cachedGrades.find(g=>g.student_record_id===s.id&&g.assignment_record_id===a.id);return g&&g.score!==null&&g.score!==''?Number(g.score):null}).filter(v=>v!==null);
+    const avg=valid.length>0?(valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1):'—';
+    return'<tr><td><code>'+(s.student_id||'—')+'</code></td><td><strong>'+(s.name||'—')+'</strong></td><td>'+(s.class_name?'<span class="badge badge-primary">'+s.class_name+'</span>':'—')+'</td>'+cells+'<td class="text-right"><strong>'+avg+'</strong></td></tr>';
+  }).join('');
+}
+
+/* ===== 匯出 ===== */
+function exportStudentGrades(student,grades){
+  const h=['代號','名稱','類型','日期','分數','滿分','得分率','備註','登記人'];
+  const rows=[h,...grades.map(g=>{const a=g.assignment;const pct=g.score!==null&&g.score!==''?(Number(g.score)/Number(a.max_score||100)*100).toFixed(1)+'%':'';return[a.test_id,a.title,a.type==='homework'?'作業':'小考',formatDate(a.date),g.score,a.max_score,pct,g.note,g.graded_by]})];
+  exportCSV(rows,student.name+'_成績');showToast('已匯出','success');
+}
+function exportAssignmentGrades(){
+  const aId=document.getElementById('assignment-query').value;
+  const assignment=cachedAssignments.find(a=>a.id===aId);if(!assignment)return;
+  const maxSc=Number(assignment.max_score||100);
+  const h=['學號','姓名','班級','分數','得分率','備註','登記人'];
+  const rows=[h,...cachedStudents.map(s=>{const g=currentAssignmentGrades.find(g=>g.student_record_id===s.id);const score=g?.score??'';const pct=score!==''?(Number(score)/maxSc*100).toFixed(1)+'%':'';return[s.student_id,s.name,s.class_name,score,pct,g?.note||'',g?.graded_by||'']})];
+  exportCSV(rows,assignment.test_id+'_全班成績');showToast('已匯出','success');
+}
+function exportOverview(){
+  const cls=document.getElementById('overview-class').value;
+  const students=cachedStudents.filter(s=>!cls||s.class_name===cls).sort((a,b)=>(a.student_id||'').localeCompare(b.student_id||''));
+  const assignments=cachedAssignments;
+  const h=['學號','姓名','班級',...assignments.map(a=>a.test_id),'平均'];
+  const rows=[h,...students.map(s=>{
+    const scores=assignments.map(a=>{const g=cachedGrades.find(g=>g.student_record_id===s.id&&g.assignment_record_id===a.id);return g?.score??''});
+    const valid=scores.filter(v=>v!=='').map(Number);
+    const avg=valid.length>0?(valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1):'';
+    return[s.student_id,s.name,s.class_name||'',...scores,avg];
+  })];
+  exportCSV(rows,'成績總覽');showToast('已匯出成績總覽','success');
+}
+async function exportAll(){
+  showToast('準備匯出...','info');
+  const h=['學號','姓名','班級','作業代號','作業名稱','類型','日期','分數','滿分','備註','登記助教'];
+  const rows=[h,...cachedGrades.map(g=>{
+    const s=cachedStudents.find(s=>s.id===g.student_record_id)||{};
+    const a=cachedAssignments.find(a=>a.id===g.assignment_record_id)||{};
+    return[s.student_id||'',s.name||'',s.class_name||'',a.test_id||'',a.title||'',a.type==='homework'?'作業':'小考',formatDate(a.date),g.score??'',a.max_score||'',g.note||'',g.graded_by||''];
+  })];
+  exportCSV(rows,'全部成績');showToast('已匯出 '+cachedGrades.length+' 筆','success');
+}
+</script>
+</body>
+</html>
