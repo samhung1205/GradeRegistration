@@ -43,4 +43,5 @@ drop policy if exists "Allow all for anon" on public.students;
 drop policy if exists "Allow all for anon" on public.assignments;
 drop policy if exists "Allow all for anon" on public.grades;
 
-crea
+create policy "Allow all for anon" on public.students for all using (true) with check (true);
+create policy "Allow all for anon" on public.assignments for all using (true) with check (true);
