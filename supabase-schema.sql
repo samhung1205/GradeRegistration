@@ -33,15 +33,26 @@ create table if not exists public.grades (
   unique(student_id, assignment_id)
 );
 
+-- 系統設定（跨裝置同步：系統名稱、助教名單）
+create table if not exists public.app_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz default now()
+);
+
 -- 開放匿名讀寫（僅限此專案前端使用，anon key 可公開）
 alter table public.students enable row level security;
 alter table public.assignments enable row level security;
 alter table public.grades enable row level security;
+alter table public.app_settings enable row level security;
 
 -- 先刪除再建立，重複執行本 .sql 時才不會報錯 "policy already exists"
 drop policy if exists "Allow all for anon" on public.students;
 drop policy if exists "Allow all for anon" on public.assignments;
 drop policy if exists "Allow all for anon" on public.grades;
+drop policy if exists "Allow all for anon" on public.app_settings;
 
 create policy "Allow all for anon" on public.students for all using (true) with check (true);
 create policy "Allow all for anon" on public.assignments for all using (true) with check (true);
+create policy "Allow all for anon" on public.grades for all using (true) with check (true);
+create policy "Allow all for anon" on public.app_settings for all using (true) with check (true);

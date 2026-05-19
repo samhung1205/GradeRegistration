@@ -496,6 +496,7 @@ mark { background: #fff176; border-radius: 2px; padding: 0 2px; }
       <div class="settings-section">
         <h4><i class="fas fa-user-tie"></i> 助教名稱設定</h4>
         <p style="font-size:12px;color:var(--muted);margin-bottom:12px">設定右上角下拉選單中的助教名稱（最多 5 位），修改後立即生效。</p>
+        <p id="settings-sync-status" style="font-size:12px;color:var(--muted);margin:0 0 12px 0">同步狀態：檢查中...</p>
         <div id="ta-names-list"></div>
         <button class="btn btn-outline btn-sm" onclick="addTAField()" style="margin-top:10px"><i class="fas fa-plus"></i> 新增助教</button>
       </div>
@@ -701,18 +702,96 @@ let _gradesCache = null;
 /* =====================================================
    SECTION 2: SETTINGS (localStorage)
    ===================================================== */
+const DEFAULT_SETTINGS = {
+  sysName: '微積分助教成績系統',
+  taNames: ['助教 A', '助教 B']
+};
+const SETTINGS_KEY = 'global';
+let settingsSyncState = 'checking'; // checking | synced | local | failed
+
+function setSettingsSyncStatus(state, detail = '') {
+  settingsSyncState = state;
+  const el = document.getElementById('settings-sync-status');
+  if (!el) return;
+  if (state === 'synced') {
+    el.textContent = '同步狀態：已同步雲端';
+    el.style.color = 'var(--success)';
+    return;
+  }
+  if (state === 'local') {
+    el.textContent = `同步狀態：僅本機${detail ? `（${detail}）` : ''}`;
+    el.style.color = 'var(--warning)';
+    return;
+  }
+  if (state === 'failed') {
+    el.textContent = `同步狀態：雲端同步失敗${detail ? `（${detail}）` : ''}`;
+    el.style.color = 'var(--danger)';
+    return;
+  }
+  el.textContent = '同步狀態：檢查中...';
+  el.style.color = 'var(--muted)';
+}
+
+function normalizeSettings(raw) {
+  const sysName = (raw?.sysName || '').toString().trim() || DEFAULT_SETTINGS.sysName;
+  const taNames = Array.isArray(raw?.taNames)
+    ? raw.taNames.map(v => (v || '').toString().trim()).filter(Boolean).slice(0, 5)
+    : [];
+  return { sysName, taNames: taNames.length ? taNames : [...DEFAULT_SETTINGS.taNames] };
+}
+
 function getSettings() {
   try {
     const s = localStorage.getItem('calc_ta_settings');
-    if (s) return JSON.parse(s);
+    if (s) return normalizeSettings(JSON.parse(s));
   } catch(e) {}
-  return {
-    sysName: '微積分助教成績系統',
-    taNames: ['助教 A', '助教 B']
-  };
+  return { ...DEFAULT_SETTINGS, taNames: [...DEFAULT_SETTINGS.taNames] };
 }
 
-function saveSettings() {
+async function loadRemoteSettings() {
+  const sb = getSupabase();
+  if (!sb) {
+    setSettingsSyncStatus('local', '未設定 Supabase');
+    return null;
+  }
+  const { data, error } = await sb.from('app_settings').select('value').eq('key', SETTINGS_KEY).maybeSingle();
+  if (error) {
+    // 若尚未建立 app_settings table，保留本機設定避免整體功能中斷
+    if (error.code === '42P01') {
+      setSettingsSyncStatus('local', '尚未建立 app_settings');
+      return null;
+    }
+    setSettingsSyncStatus('failed', error.message);
+    throw new Error(error.message);
+  }
+  setSettingsSyncStatus('synced');
+  if (!data?.value) return null;
+  return normalizeSettings(data.value);
+}
+
+async function saveRemoteSettings(settings) {
+  const sb = getSupabase();
+  if (!sb) {
+    setSettingsSyncStatus('local', '未設定 Supabase');
+    return false;
+  }
+  const { error } = await sb.from('app_settings').upsert(
+    { key: SETTINGS_KEY, value: settings, updated_at: new Date().toISOString() },
+    { onConflict: 'key' }
+  );
+  if (error) {
+    if (error.code === '42P01') {
+      setSettingsSyncStatus('local', '尚未建立 app_settings');
+      return false;
+    }
+    setSettingsSyncStatus('failed', error.message);
+    throw new Error(error.message);
+  }
+  setSettingsSyncStatus('synced');
+  return true;
+}
+
+async function saveSettings() {
   const sysName = document.getElementById('set-sysname').value.trim() || '微積分助教成績系統';
   const inputs = document.querySelectorAll('.ta-name-input');
   const taNames = [];
@@ -721,8 +800,17 @@ function saveSettings() {
     if (v) taNames.push(v);
   });
   if (taNames.length === 0) { showToast('至少需要一位助教名稱', 'error'); return; }
-  const settings = { sysName, taNames };
+  const settings = normalizeSettings({ sysName, taNames });
   localStorage.setItem('calc_ta_settings', JSON.stringify(settings));
+  if (useSupabase()) {
+    try {
+      const synced = await saveRemoteSettings(settings);
+      if (!synced) showToast('已儲存本機（尚未建立雲端設定表）', 'warning');
+    } catch (e) {
+      console.warn('saveRemoteSettings failed:', e);
+      showToast('雲端同步失敗，已儲存本機設定', 'warning');
+    }
+  }
   applySettings(settings);
   showToast('設定已儲存', 'success');
 }
@@ -743,6 +831,7 @@ function loadSettingsPage() {
   const s = getSettings();
   document.getElementById('set-sysname').value = s.sysName;
   renderTANamesList(s.taNames);
+  if (!useSupabase()) setSettingsSyncStatus('local', '未設定 Supabase');
 }
 
 function renderTANamesList(names) {
@@ -776,15 +865,57 @@ function removeTAField(idx) {
    SECTION 3: TA SELECTOR
    ===================================================== */
 function initTASelector() {
-  const settings = getSettings();
-  applySettings(settings);
-  const saved = localStorage.getItem('current_ta');
-  const sel = document.getElementById('ta-select');
-  if (saved && Array.from(sel.options).some(o => o.value === saved)) {
-    sel.value = saved;
-  }
-  updateTABadge();
+  return (async () => {
+    let settings = getSettings();
+    if (useSupabase()) {
+      try {
+        const remote = await loadRemoteSettings();
+        if (remote) {
+          settings = remote;
+          localStorage.setItem('calc_ta_settings', JSON.stringify(settings));
+        }
+      } catch (e) {
+        console.warn('loadRemoteSettings failed:', e);
+        if (settingsSyncState !== 'failed') setSettingsSyncStatus('failed', '讀取失敗');
+      }
+    }
+    applySettings(settings);
+    const saved = localStorage.getItem('current_ta');
+    const sel = document.getElementById('ta-select');
+    if (saved && Array.from(sel.options).some(o => o.value === saved)) {
+      sel.value = saved;
+    }
+    updateTABadge();
+  })();
 }
+
+function refreshSettingsFromCloud() {
+  if (!useSupabase()) return;
+  loadRemoteSettings()
+    .then(remote => {
+      if (!remote) return;
+      const local = getSettings();
+      const localJson = JSON.stringify(local);
+      const remoteJson = JSON.stringify(remote);
+      if (localJson !== remoteJson) {
+        localStorage.setItem('calc_ta_settings', remoteJson);
+        applySettings(remote);
+        if (currentPage === 'settings') {
+          document.getElementById('set-sysname').value = remote.sysName;
+          renderTANamesList(remote.taNames);
+        }
+      }
+    })
+    .catch(e => console.warn('refreshSettingsFromCloud failed:', e));
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refreshSettingsFromCloud();
+});
+
+window.addEventListener('focus', () => {
+  refreshSettingsFromCloud();
+});
 
 function onTAChange() {
   const v = document.getElementById('ta-select').value;
@@ -1177,8 +1308,21 @@ function handleXlsxFile(file) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
       if (json.length < 2) { showToast('檔案沒有資料', 'error'); return; }
-      xlsxHeaders = json[0].map(String);
-      xlsxData = json.slice(1).filter(r => r.some(c => c !== ''));
+      // 點名單常把標題放第一列（如「國立陽明交通大學...」），真正欄位名在後面：找出含「學號」與「姓名」的那一列當標題
+      let headerRowIndex = 0;
+      for (let i = 0; i < Math.min(json.length, 15); i++) {
+        const row = json[i].map(String);
+        const hasXuehao = row.some(c => /學號/.test(c) && !/學生編號/.test(c));
+        const hasXingming = row.some(c => /姓名/.test(c));
+        const hasBianhao = row.some(c => /學生編號/.test(c));
+        if (hasXingming && (hasXuehao || hasBianhao)) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+      xlsxHeaders = json[headerRowIndex].map(String);
+      xlsxData = json.slice(headerRowIndex + 1).filter(r => r.some(c => c !== '' && c !== undefined));
+      if (!xlsxData.length) { showToast('找不到資料列', 'error'); return; }
       showXlsxPreview();
     } catch(err) { showToast('讀取失敗: '+err.message, 'error'); }
   };
@@ -1204,10 +1348,11 @@ function showXlsxPreview() {
     const base = id === 'col-sclass' ? '<option value="">(無)</option>' : '';
     el.innerHTML = base + optHtml;
   });
-  // Smart guess
+  // Smart guess：學號要排除「學生編號」（點名單上學生編號是 1,2,3…，真正學號是 9 碼數字）
   xlsxHeaders.forEach((h,i) => {
-    const lower = h.toLowerCase();
-    if (/學號|id|student.*id|sid/.test(lower)) document.getElementById('col-sid').value = i;
+    const lower = (h||'').toLowerCase();
+    const isStudentBianhao = /學生編號/.test(h);
+    if ((/學號|id|student.*id|sid/.test(lower)) && !isStudentBianhao) document.getElementById('col-sid').value = i;
     if (/姓名|name/.test(lower)) document.getElementById('col-sname').value = i;
     if (/班級|class/.test(lower)) document.getElementById('col-sclass').value = i;
   });
